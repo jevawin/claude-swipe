@@ -5,7 +5,7 @@ A slide-out panel of recent Claude Code chats, grouped by "waiting on you", "stu
 - Open: push the cursor against the right edge of the rightmost screen for 0.25s, or press ⌃⌥C, or use the menu bar icon.
 - Close: move the cursor away, click elsewhere, or press Esc.
 - Search: type as soon as it opens. Every word must match the title, folder or preview. Enter opens the top match, Esc clears.
-- Click a desktop-app chat to open it (`claude://code/continue?session=local_…`). Click a terminal chat to copy a `claude -r` command.
+- Click a desktop-app chat to open it. If a Claude window already shows that chat (a pop-out or the main window), it comes to the front; that needs Accessibility permission. Otherwise it opens via `claude://code/continue?session=local_…`, which always uses the main window. Click a terminal chat to copy a `claude -r` command.
 
 ## Build
 
@@ -24,6 +24,10 @@ Needs Xcode's `swiftc` and `python3`. The Haiku pass uses the `claude` CLI on yo
 ## Folder emojis
 
 Each folder gets an emoji badge on its card. Haiku picks one the first time a folder appears and caches it in `~/Library/Application Support/claude-swipe/folder-emoji.json`. Add your own under `"overrides"`: a key covers that folder and everything under it, and the longest match wins.
+
+## Rebuilds and permissions
+
+The app is ad-hoc signed, so macOS may treat each rebuild as a new app and drop its Accessibility permission. If window focus stops working after a rebuild, turn ClaudeSwipe off and on in System Settings → Privacy and Security → Accessibility.
 
 ## Not done yet
 

@@ -429,7 +429,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func open(_ c: Chat) {
         if let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") {
             hide()
-            NSWorkspace.shared.open(url)
+            // The deep link always loads the chat in the main window, so first try to
+            // raise a window already showing it (a pop-out, or the main window itself).
+            if !raiseClaudeWindow(titled: c.title) { NSWorkspace.shared.open(url) }
             return
         }
         // Terminal-only chat: copy a resume command instead.
@@ -437,6 +439,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(cmd, forType: .string)
         store.notice = "Copied resume command for “\(c.title)”. Paste it in a terminal."
+    }
+
+    // Finds a Claude window whose title is the chat's title and brings it to the front.
+    // Needs Accessibility permission; asks once, then falls back to the deep link.
+    // Unverified: that pop-out windows are titled with the chat title. Titles are
+    // logged (log show --predicate 'process == "ClaudeSwipe"') to check.
+    func raiseClaudeWindow(titled title: String) -> Bool {
+        let opts = ["AXTrustedCheckOptionPrompt": !UserDefaults.standard.bool(forKey: "axPrompted")] as CFDictionary
+        guard AXIsProcessTrustedWithOptions(opts) else {
+            UserDefaults.standard.set(true, forKey: "axPrompted")
+            return false
+        }
+        guard let app = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.anthropic.claudefordesktop").first else { return false }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var ref: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &ref) == .success,
+              let windows = ref as? [AXUIElement] else { return false }
+        let titles = windows.map { w -> String in
+            var t: CFTypeRef?
+            AXUIElementCopyAttributeValue(w, kAXTitleAttribute as CFString, &t)
+            return (t as? String) ?? ""
+        }
+        NSLog("ClaudeSwipe windows: %@ (looking for %@)", titles.description, title)
+        let want = title.lowercased()
+        guard let i = titles.firstIndex(where: { $0.lowercased() == want })
+            ?? titles.firstIndex(where: { !want.isEmpty && $0.lowercased().contains(want) }) else { return false }
+        AXUIElementPerformAction(windows[i], kAXRaiseAction as CFString)
+        app.activate()
+        return true
     }
 
     func registerHotKey() {
