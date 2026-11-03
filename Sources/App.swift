@@ -19,6 +19,7 @@ struct Chat: Codable, Identifiable, Hashable {
     let app: String
     let desktop_id: String?
     let cwd: String?
+    let emoji: String?
 }
 
 final class Store: ObservableObject {
@@ -144,7 +145,7 @@ struct PanelView: View {
         let words = store.query.lowercased().split(separator: " ")
         if words.isEmpty { return store.chats }
         return store.chats.filter { c in
-            let hay = "\(c.title) \(c.folder) \(c.why)".lowercased()
+            let hay = "\(c.title) \(c.folder) \(c.why) \(c.emoji ?? "")".lowercased()
             return words.allSatisfy { hay.contains($0) }
         }
     }
@@ -229,9 +230,19 @@ struct Card: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // Status tile, with the folder emoji as a small badge on its corner.
             RoundedRectangle(cornerRadius: 9).fill(color)
-                .frame(width: 34, height: 34)
                 .overlay(Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
+                .overlay(alignment: .bottomTrailing) {
+                    if let e = chat.emoji, !e.isEmpty {
+                        Circle().fill(Theme.cardHover)
+                            .frame(width: 20, height: 20)
+                            .overlay(Text(e).font(.system(size: 11)))
+                            .overlay(Circle().stroke(Theme.card, lineWidth: 2))
+                            .offset(x: 6, y: 6)
+                    }
+                }
+            .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)

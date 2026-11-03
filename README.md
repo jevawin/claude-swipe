@@ -21,6 +21,10 @@ Needs Xcode's `swiftc` and `python3`. The Haiku pass uses the `claude` CLI on yo
 
 `recent_chats.py` reads `~/.claude/projects/*/*.jsonl` and the desktop app's `claude-code-sessions/*/*/local_*.json`. Both formats are undocumented and may change. Rules decide most chats. The rest go to Haiku in one batch, and verdicts are cached in `~/Library/Caches/claude-swipe/verdicts.json`.
 
+## Folder emojis
+
+Each folder gets an emoji badge on its card. Haiku picks one the first time a folder appears and caches it in `~/Library/Application Support/claude-swipe/folder-emoji.json`. Add your own under `"overrides"`: a key covers that folder and everything under it, and the longest match wins.
+
 ## Not done yet
 
 - Trackpad edge swipe. Needs BetterTouchTool or the private MultitouchSupport framework. Turn off the system gesture in System Settings → Trackpad → More Gestures → Notification Centre.
