@@ -1,34 +1,42 @@
 # ClaudeSwipe
 
-A slide-out panel of recent Claude Code chats, grouped by "waiting on you", "stuck", "working" and "done".
+A macOS menu bar app that slides out a panel of your recent Claude Code chats, so you can see which ones are waiting on you.
 
-- Open: push the cursor against the right edge of the rightmost screen for 0.25s, or press ⌃⌥C, or use the menu bar icon.
-- Close: move the cursor away, click elsewhere, or press Esc.
-- Search: type as soon as it opens. Every word must match the title, folder or preview. Enter opens the top match, Esc clears.
-- Click a desktop-app chat to open it. If a Claude window already shows that chat (a pop-out or the main window), it comes to the front; that needs Accessibility permission. Otherwise it opens via `claude://code/continue?session=local_…`, which always uses the main window. Click a terminal chat to copy a `claude -r` command.
+Chats are grouped as:
 
-## Build
+- **Active**: anything you've touched in the last hour.
+- **Waiting · today** and **Waiting · older**: chats that need a reply, split by when you last touched them.
+- **Done**: finished chats, collapsed.
+
+Each card shows the chat's status, folder, a one-line summary, and an emoji for the folder.
+
+## Install
+
+You need a Mac with Apple's command line tools. If `swiftc --version` fails, run `xcode-select --install` first.
 
 ```bash
+git clone https://github.com/jevawin/claude-swipe.git
+cd claude-swipe
 ./build.sh --run
 ```
 
-This installs to `~/Applications/ClaudeSwipe.app` and launches it. The app turns on launch at login the first time it runs. Toggle it from the menu bar icon.
+This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens it. A chat bubble icon appears in the menu bar. The app starts at login from then on; turn that off from the menu bar icon.
 
-Needs Xcode's `swiftc` and `python3`. The Haiku pass uses the `claude` CLI on your login (`claude -p --model haiku --no-session-persistence`).
+Optional: if the `claude` command-line tool is installed and signed in, the app uses Haiku to sort unclear chats and pick folder emojis. Without it, everything else still works.
 
-## How it labels chats
+## Use
 
-`recent_chats.py` reads `~/.claude/projects/*/*.jsonl` and the desktop app's `claude-code-sessions/*/*/local_*.json`. Both formats are undocumented and may change. Rules decide most chats. The rest go to Haiku in one batch, and verdicts are cached in `~/Library/Caches/claude-swipe/verdicts.json`.
+- **Open**: push the cursor against the right edge of the screen, press ⌃⌥C, or click the menu bar icon.
+- **Search**: start typing as soon as it opens. `acme` finds chats in an `acme` folder, `clients` finds every `clients/…` folder.
+- **Open a chat**: click it, or press Enter for the top match. If the chat is already open in its own window, that window comes to the front.
+- **Close**: move the cursor away, click elsewhere, or press Esc.
 
-## Folder emojis
+The first time you click a chat, macOS asks for Accessibility permission. That's what lets it bring the right window forward. If you skip it, chats still open in the main Claude window.
 
-Each folder gets an emoji badge on its card. Haiku picks one the first time a folder appears and caches it in `~/Library/Application Support/claude-swipe/folder-emoji.json`. Add your own under `"overrides"`: a key covers that folder and everything under it, and the longest match wins.
+## Good to know
 
-## Rebuilds and permissions
-
-The app is ad-hoc signed, so macOS may treat each rebuild as a new app and drop its Accessibility permission. If window focus stops working after a rebuild, turn ClaudeSwipe off and on in System Settings → Privacy and Security → Accessibility.
-
-## Not done yet
-
-- Trackpad edge swipe. Needs BetterTouchTool or the private MultitouchSupport framework. Turn off the system gesture in System Settings → Trackpad → More Gestures → Notification Centre.
+- It reads Claude's local chat files. The file formats aren't documented, so a Claude update could break it.
+- The Haiku step sends the last message or two of an unclear chat, and your folder names, through your own `claude` login.
+- After a rebuild, macOS may forget the Accessibility permission. Turn ClaudeSwipe off and on again in System Settings → Privacy and Security → Accessibility.
+- Change a folder's emoji in `~/Library/Application Support/claude-swipe/folder-emoji.json`, under `"overrides"`. A key covers that folder and everything under it.
+- Folder names are shown relative to `~/Developer` when chats live there.
