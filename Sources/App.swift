@@ -22,6 +22,17 @@ struct Chat: Codable, Identifiable, Hashable {
     let emoji: String?
 }
 
+// Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
+func debugLog(_ msg: String) {
+    let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/ClaudeSwipe.log")
+    let line = "\(ISO8601DateFormatter().string(from: Date())) \(msg)\n"
+    if let h = try? FileHandle(forWritingTo: url) {
+        h.seekToEndOfFile(); h.write(line.data(using: .utf8)!); try? h.close()
+    } else {
+        try? line.write(to: url, atomically: true, encoding: .utf8)
+    }
+}
+
 final class Store: ObservableObject {
     @Published var chats: [Chat] = []
     @Published var updating = false
@@ -290,6 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var edgeSince: Date?
     var shown = false
     var mouseWasInside = false
+    var panelTarget = NSRect.zero  // where the panel ends up; its live frame is off-screen while it slides in
     let width: CGFloat = 440
     let dwell: TimeInterval = 0.25  // how long the cursor must push the edge
 
@@ -312,9 +324,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "bubble.left.and.text.bubble.right",
                                            accessibilityDescription: "Claude chats")
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show chats (⌃⌥C)", action: #selector(toggle), keyEquivalent: "")
-        menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "")
+        // Explicit targets: with a nil target the items rely on the responder chain,
+        // which an accessory app with no key window may not route to the delegate.
+        menu.addItem(withTitle: "Show chats (⌃⌥C)", action: #selector(menuShow), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "").target = self
         loginItem = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLogin), keyEquivalent: "")
+        loginItem.target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -322,7 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.tick() }
         Timer.scheduledTimer(withTimeInterval: 120, repeats: true) { [weak self] _ in self?.store.refresh() }
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.hide()
+            self?.hide(reason: "click elsewhere")
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             if e.keyCode == UInt16(kVK_Escape) {
@@ -346,6 +361,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func refresh() { store.refresh() }
 
+    // Runs after the menu has closed, so menu tracking can't swallow the panel's first frames.
+    @objc func menuShow() {
+        debugLog("menu: show chats")
+        DispatchQueue.main.async { if !self.shown { self.toggle() } }
+    }
+
     @objc func toggleLogin() {
         let s = SMAppService.mainApp
         do {
@@ -367,8 +388,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let p = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) else { return }
         if shown {
-            let zone = panel.frame.insetBy(dx: -40, dy: -40)
-            if zone.contains(p) { mouseWasInside = true } else if mouseWasInside { hide() }
+            let zone = panelTarget.insetBy(dx: -40, dy: -40)
+            if zone.contains(p) { mouseWasInside = true } else if mouseWasInside { hide(reason: "cursor left") }
             return
         }
         let f = screen.frame
@@ -395,6 +416,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func show(on screen: NSScreen) {
         let vf = screen.visibleFrame
         let target = NSRect(x: vf.maxX - width - 8, y: vf.minY + 8, width: width, height: vf.height - 16)
+        panelTarget = target
+        debugLog("show")
         panel.setFrame(target.offsetBy(dx: width + 20, dy: 0), display: false)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -413,8 +436,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Date().timeIntervalSince(store.lastRun) > 20 { store.refresh() }
     }
 
-    func hide() {
+    func hide(reason: String = "") {
         guard shown else { return }
+        debugLog("hide \(reason)")
         shown = false
         let f = panel.frame
         NSAnimationContext.runAnimationGroup({ ctx in
@@ -462,7 +486,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AXUIElementCopyAttributeValue(w, kAXTitleAttribute as CFString, &t)
             return (t as? String) ?? ""
         }
-        NSLog("ClaudeSwipe windows: %@ (looking for %@)", titles.description, title)
+        debugLog("windows \(titles) looking for \(title)")
         let want = title.lowercased()
         guard let i = titles.firstIndex(where: { $0.lowercased() == want })
             ?? titles.firstIndex(where: { !want.isEmpty && $0.lowercased().contains(want) }) else { return false }
