@@ -92,10 +92,14 @@ def classify(recs, age):
     for b in reversed(tool_uses):
         name, inp = b.get("name", ""), b.get("input", {})
         if name.endswith("wrap_up"):
-            if inp.get("ask"):
-                return "waiting", inp["ask"], False, None
+            if inp.get("ask") or inp.get("blocked"):
+                return "waiting", inp.get("ask") or inp.get("recap", ""), False, None
             if recs[-1]["type"] == "assistant":
-                return "done", inp.get("recap", ""), False, None
+                # No ask, but the closing message can still put questions to the user.
+                final = texts[-1] if texts else ""
+                if "?" not in final:
+                    return "done", inp.get("recap", ""), False, None
+                return "unsure", "", True, {"prompt": prompt[-600:], "reply": final[-1500:]}
         if name in ("AskUserQuestion", "ExitPlanMode") and b is tool_uses[-1]:
             return "waiting", "question / plan approval", False, None
 
@@ -111,6 +115,36 @@ def classify(recs, age):
     if final.rstrip().endswith("?"):
         return "waiting", final.strip().splitlines()[-1][:160], False, None
     return "unsure", "", True, {"prompt": prompt[-600:], "reply": final[-1500:]}
+
+
+def app_summary(dm, recs):
+    """The desktop app's own post-turn verdict, if it covers the latest reply.
+
+    Measured 2026-11-03: postTurnSummary.status_category is one of completed,
+    blocked or review_ready; postTurnSummaryFor names the assistant message it
+    summarises. Undocumented, so anything else falls back to our rules.
+    """
+    p = dm.get("postTurnSummary") or {}
+    last = recs[-1] if recs else None
+    if not p or not last or last["type"] != "assistant":
+        return None
+    if dm.get("postTurnSummaryFor") != last.get("uuid"):
+        return None
+    cat = p.get("status_category")
+    if cat in ("blocked", "review_ready"):
+        return "waiting", p.get("needs_action") or p.get("status_detail", "")
+    if cat == "completed":
+        return "done", p.get("status_detail", "")
+    return None
+
+
+def section(status, engaged):
+    """Group by when you last touched the chat, then by whether it needs you."""
+    if engaged < 3600:
+        return "active"
+    if status == "done":
+        return "done"
+    return "today" if engaged < 86400 else "older"
 
 
 def ask_haiku(items):
@@ -150,7 +184,7 @@ def folder_label(cwd, branch):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--days", type=float, default=3)
+    ap.add_argument("--days", type=float, default=7)
     ap.add_argument("--no-ai", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
@@ -173,10 +207,16 @@ def main():
         status, why, needs_ai, ctx = classify(recs, age)
         if status == "empty":
             continue
+        verdict = app_summary(dm, recs)
+        if verdict and status not in ("running", "stuck"):
+            (status, why), needs_ai = verdict, False
+        # Engagement: last time you looked at it, wrote in it, or Claude wrote in it.
+        touched = max(mtime, float(dm.get("lastFocusedAt") or 0) / 1000,
+                      float(dm.get("latestUserFrameAt") or 0) / 1000)
         title = dm.get("title") or m["title"] or (ctx or {}).get("prompt", "")[:60] or sid[:8]
         row = {"id": sid, "status": status, "why": why, "title": title,
                "folder": folder_label(dm.get("cwd") or m["cwd"], m["branch"]),
-               "age": age, "app": "desktop" if dm else "cli",
+               "age": age, "engaged": now - touched, "app": "desktop" if dm else "cli",
                "desktop_id": dm.get("sessionId"),
                "cwd": dm.get("cwd") or m["cwd"]}
         key = f"{sid}:{mtime}"
@@ -197,16 +237,18 @@ def main():
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_text(json.dumps(cache))
 
-    order = {"waiting": 0, "stuck": 1, "unsure": 2, "running": 3, "done": 4}
-    rows.sort(key=lambda r: (order.get(r["status"], 9), r["age"]))
+    for r in rows:
+        r["section"] = section(r["status"], r["engaged"])
+    order = {"active": 0, "today": 1, "older": 2, "done": 3}
+    rows.sort(key=lambda r: (order[r["section"]], r["engaged"]))
 
     if args.json:
         print(json.dumps(rows, indent=1))
         return
     for r in rows:
-        a = max(0, r["age"])
+        a = max(0, r["engaged"])
         age = f"{int(a // 60)}m" if a < 3600 else f"{int(a // 3600)}h" if a < 86400 else f"{int(a // 86400)}d"
-        print(f"{r['status']:<8} {age:>4}  {r['folder'][:34]:<34}  {r['title'][:40]:<40}  {r['why'][:70]}")
+        print(f"{r['section']:<6} {r['status']:<8} {age:>4}  {r['folder'][:30]:<30}  {r['title'][:38]:<38}  {r['why'][:60]}")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,8 @@ struct Chat: Codable, Identifiable, Hashable {
     let title: String
     let folder: String
     let age: Double
+    let engaged: Double
+    let section: String
     let app: String
     let desktop_id: String?
     let cwd: String?
@@ -104,13 +106,22 @@ enum Theme {
 
 // MARK: - Views
 
-// Status groups: label, tile colour, SF Symbol for the card's icon tile.
-let groupOrder: [(key: String, label: String, color: Color, icon: String)] = [
-    ("waiting", "Waiting on you", Theme.brand, "questionmark.bubble"),
-    ("stuck", "Stuck or needs permission", Color(nsColor: hsl(0, 55, 55)), "exclamationmark.triangle"),
-    ("unsure", "Unclear", Color(nsColor: hsl(48, 4.8, 50)), "questionmark"),
-    ("running", "Working", Color(nsColor: hsl(210, 50, 52)), "ellipsis"),
-    ("done", "Done", Color(nsColor: hsl(120, 21, 45)), "checkmark"),
+// Status sets the card's icon tile: colour and SF Symbol.
+let statusStyle: [String: (color: Color, icon: String)] = [
+    "waiting": (Theme.brand, "questionmark.bubble"),
+    "stuck": (Color(nsColor: hsl(0, 55, 55)), "exclamationmark.triangle"),
+    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), "questionmark"),
+    "running": (Color(nsColor: hsl(210, 50, 52)), "ellipsis"),
+    "done": (Color(nsColor: hsl(120, 21, 45)), "checkmark"),
+]
+
+// Sections come from recent_chats.py: touched in the last hour, then not-done
+// chats split by today vs older, then everything done.
+let sections: [(key: String, label: String)] = [
+    ("active", "Active"),
+    ("today", "Waiting · today"),
+    ("older", "Waiting · older"),
+    ("done", "Done"),
 ]
 
 func ageText(_ s: Double) -> String {
@@ -123,6 +134,7 @@ func ageText(_ s: Double) -> String {
 struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
+    @State private var showDone = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -146,15 +158,27 @@ struct PanelView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(groupOrder, id: \.key) { g in
-                        let items = store.chats.filter { $0.status == g.key }
+                    ForEach(sections, id: \.key) { sec in
+                        let items = store.chats.filter { $0.section == sec.key }
                         if !items.isEmpty {
-                            Text("\(g.label) · \(items.count)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.secondary)
-                                .padding(.horizontal, 2).padding(.top, 8)
-                            ForEach(items) { c in
-                                Card(chat: c, color: g.color, icon: g.icon).onTapGesture { open(c) }
+                            let collapsible = sec.key == "done"
+                            HStack(spacing: 4) {
+                                Text("\(sec.label) · \(items.count)")
+                                if collapsible {
+                                    Image(systemName: showDone ? "chevron.down" : "chevron.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.secondary)
+                            .padding(.horizontal, 2).padding(.top, 8)
+                            .contentShape(Rectangle())
+                            .onTapGesture { if collapsible { showDone.toggle() } }
+                            if !collapsible || showDone {
+                                ForEach(items) { c in
+                                    let st = statusStyle[c.status] ?? statusStyle["unsure"]!
+                                    Card(chat: c, color: st.color, icon: st.icon).onTapGesture { open(c) }
+                                }
                             }
                         }
                     }
@@ -185,7 +209,7 @@ struct Card: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
                     Spacer(minLength: 6)
-                    Text(ageText(chat.age)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                    Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 6) {
                     Text(chat.folder)
