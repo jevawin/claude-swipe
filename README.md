@@ -4,6 +4,7 @@ A slide-out panel of recent Claude Code chats, grouped by "waiting on you", "stu
 
 - Open: push the cursor against the right edge of the rightmost screen for 0.25s, or press ⌃⌥C, or use the menu bar icon.
 - Close: move the cursor away, click elsewhere, or press Esc.
+- Search: type as soon as it opens. Every word must match the title, folder or preview. Enter opens the top match, Esc clears.
 - Click a desktop-app chat to open it (`claude://code/continue?session=local_…`). Click a terminal chat to copy a `claude -r` command.
 
 ## Build

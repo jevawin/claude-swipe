@@ -26,6 +26,8 @@ final class Store: ObservableObject {
     @Published var updating = false
     @Published var error: String?
     @Published var notice: String?
+    @Published var query = ""
+    @Published var focusTick = 0  // bumped on each show to focus the search field
     var lastRun = Date.distantPast
     let script: String
 
@@ -135,6 +137,17 @@ struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
     @State private var showDone = false
+    @FocusState private var searchFocused: Bool
+
+    // Every word must appear somewhere in title, folder or preview.
+    var filtered: [Chat] {
+        let words = store.query.lowercased().split(separator: " ")
+        if words.isEmpty { return store.chats }
+        return store.chats.filter { c in
+            let hay = "\(c.title) \(c.folder) \(c.why)".lowercased()
+            return words.allSatisfy { hay.contains($0) }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -146,7 +159,21 @@ struct PanelView: View {
                     .buttonStyle(.borderless)
                     .help("Refresh")
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
+                TextField("Search chats or folders", text: $store.query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14))
+                    .focused($searchFocused)
+                    .onSubmit { if let first = sections.flatMap({ s in filtered.filter { $0.section == s.key } }).first { open(first) } }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.card))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+            .padding(.horizontal, 12).padding(.bottom, 10)
+            .onChange(of: store.focusTick) { searchFocused = true }
+            .onAppear { searchFocused = true }
             Rectangle().fill(Theme.border).frame(height: 1)
             if let n = store.notice {
                 Text(n).font(.system(size: 13)).padding(.horizontal, 16).padding(.vertical, 6)
@@ -159,7 +186,7 @@ struct PanelView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(sections, id: \.key) { sec in
-                        let items = store.chats.filter { $0.section == sec.key }
+                        let items = filtered.filter { $0.section == sec.key }
                         if !items.isEmpty {
                             let collapsible = sec.key == "done"
                             HStack(spacing: 4) {
@@ -174,7 +201,7 @@ struct PanelView: View {
                             .padding(.horizontal, 2).padding(.top, 8)
                             .contentShape(Rectangle())
                             .onTapGesture { if collapsible { showDone.toggle() } }
-                            if !collapsible || showDone {
+                            if !collapsible || showDone || !store.query.isEmpty {
                                 ForEach(items) { c in
                                     let st = statusStyle[c.status] ?? statusStyle["unsure"]!
                                     Card(chat: c, color: st.color, icon: st.icon).onTapGesture { open(c) }
@@ -287,7 +314,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.hide()
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
-            if e.keyCode == UInt16(kVK_Escape) { self?.hide(); return nil }
+            if e.keyCode == UInt16(kVK_Escape) {
+                if let s = self?.store, !s.query.isEmpty { s.query = "" } else { self?.hide() }
+                return nil
+            }
             return e
         }
         registerHotKey()
@@ -367,6 +397,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shown = true
         mouseWasInside = target.insetBy(dx: -40, dy: -40).contains(NSEvent.mouseLocation)
         store.notice = nil
+        store.query = ""
+        store.focusTick += 1
         if Date().timeIntervalSince(store.lastRun) > 20 { store.refresh() }
     }
 
