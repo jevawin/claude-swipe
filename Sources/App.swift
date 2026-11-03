@@ -98,16 +98,19 @@ enum Theme {
     static let secondary = themed(hsl(51, 3.1, 43.7), hsl(48, 4.8, 59.2))   // --text-400
     static let border = themed(hsl(51, 16.5, 84.5), hsl(50, 9, 73.7).withAlphaComponent(0.15))
     static let brand = Color(nsColor: hsl(15, 63.1, 59.6))                  // --accent-brand
+    static let card = themed(.white, hsl(60, 2.1, 18.4))                    // --bg-000
+    static let cardHover = themed(hsl(53, 28.6, 94.5), hsl(60, 2.1, 21))
 }
 
 // MARK: - Views
 
-let groupOrder: [(key: String, label: String, color: Color)] = [
-    ("waiting", "Waiting on you", Theme.brand),
-    ("stuck", "Stuck or needs permission", .red),
-    ("unsure", "Unclear", .gray),
-    ("running", "Working", .blue),
-    ("done", "Done", .green),
+// Status groups: label, tile colour, SF Symbol for the card's icon tile.
+let groupOrder: [(key: String, label: String, color: Color, icon: String)] = [
+    ("waiting", "Waiting on you", Theme.brand, "questionmark.bubble"),
+    ("stuck", "Stuck or needs permission", Color(nsColor: hsl(0, 55, 55)), "exclamationmark.triangle"),
+    ("unsure", "Unclear", Color(nsColor: hsl(48, 4.8, 50)), "questionmark"),
+    ("running", "Working", Color(nsColor: hsl(210, 50, 52)), "ellipsis"),
+    ("done", "Done", Color(nsColor: hsl(120, 21, 45)), "checkmark"),
 ]
 
 func ageText(_ s: Double) -> String {
@@ -124,7 +127,7 @@ struct PanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Claude chats").font(.system(size: 18, weight: .semibold))
+                Text("Claude chats").font(.system(size: 16, weight: .semibold))
                 Spacer()
                 if store.updating { ProgressView().controlSize(.small) }
                 Button { store.refresh() } label: { Image(systemName: "arrow.clockwise") }
@@ -134,28 +137,29 @@ struct PanelView: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
             Rectangle().fill(Theme.border).frame(height: 1)
             if let n = store.notice {
-                Text(n).font(.system(size: 14)).padding(.horizontal, 16).padding(.vertical, 6)
+                Text(n).font(.system(size: 13)).padding(.horizontal, 16).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.accentColor.opacity(0.15))
             }
             if let e = store.error {
-                Text(e).font(.system(size: 14)).foregroundStyle(.red).padding(16)
+                Text(e).font(.system(size: 13)).foregroundStyle(.red).padding(16)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(groupOrder, id: \.key) { g in
                         let items = store.chats.filter { $0.status == g.key }
                         if !items.isEmpty {
                             Text("\(g.label) · \(items.count)")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(Theme.secondary)
-                                .textCase(.uppercase)
-                                .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 2)
-                            ForEach(items) { c in Row(chat: c, color: g.color).onTapGesture { open(c) } }
+                                .padding(.horizontal, 2).padding(.top, 8)
+                            ForEach(items) { c in
+                                Card(chat: c, color: g.color, icon: g.icon).onTapGesture { open(c) }
+                            }
                         }
                     }
                 }
-                .padding(.horizontal, 6).padding(.bottom, 12)
+                .padding(.horizontal, 12).padding(.bottom, 12)
             }
         }
         .foregroundStyle(Theme.text)
@@ -165,39 +169,47 @@ struct PanelView: View {
     }
 }
 
-struct Row: View {
+// Notification-style card: icon tile, title with time top right, folder chip, preview.
+struct Card: View {
     let chat: Chat
     let color: Color
+    let icon: String
     @State private var hover = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Circle().fill(color).frame(width: 8, height: 8).padding(.top, 7)
-            VStack(alignment: .leading, spacing: 4) {
+            RoundedRectangle(cornerRadius: 9).fill(color)
+                .frame(width: 34, height: 34)
+                .overlay(Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(chat.title).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(ageText(chat.age)).font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                    Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Text(ageText(chat.age)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 6) {
                     Text(chat.folder)
-                        .font(.system(size: 14, design: .monospaced))
+                        .font(.system(size: 12, design: .monospaced))
                         .lineLimit(1).truncationMode(.middle)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
                         .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
                     if chat.app == "cli" {
-                        Text("terminal").font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                        Text("terminal").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                     }
                 }
+                .padding(.top, 4)
                 if !chat.why.isEmpty {
-                    Text(chat.why).font(.system(size: 14)).foregroundStyle(Theme.text.opacity(0.85)).lineLimit(2)
+                    Text(chat.why).font(.system(size: 13)).foregroundStyle(Theme.text.opacity(0.85))
+                        .lineLimit(2).padding(.top, 7)
                 }
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.text.opacity(hover ? 0.06 : 0)))
-        .contentShape(Rectangle())
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(hover ? Theme.cardHover : Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 14))
         .onHover { hover = $0 }
     }
 }
