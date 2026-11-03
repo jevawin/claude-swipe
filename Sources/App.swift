@@ -79,10 +79,31 @@ final class Store: ObservableObject {
     }
 }
 
+// MARK: - Theme
+
+// HSL values copied from the Claude desktop app's CSS tokens (--bg-100, --text-100 etc.).
+func hsl(_ h: CGFloat, _ s: CGFloat, _ l: CGFloat) -> NSColor {
+    let s = s / 100, l = l / 100
+    let v = l + s * min(l, 1 - l)
+    return NSColor(hue: h / 360, saturation: v == 0 ? 0 : 2 * (1 - l / v), brightness: v, alpha: 1)
+}
+
+func themed(_ light: NSColor, _ dark: NSColor) -> Color {
+    Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light })
+}
+
+enum Theme {
+    static let bg = themed(hsl(48, 33.3, 97.1), hsl(60, 2.7, 14.5))         // --bg-100
+    static let text = themed(hsl(60, 2.6, 7.6), hsl(48, 33.3, 97.1))        // --text-100
+    static let secondary = themed(hsl(51, 3.1, 43.7), hsl(48, 4.8, 59.2))   // --text-400
+    static let border = themed(hsl(51, 16.5, 84.5), hsl(50, 9, 73.7).withAlphaComponent(0.15))
+    static let brand = Color(nsColor: hsl(15, 63.1, 59.6))                  // --accent-brand
+}
+
 // MARK: - Views
 
 let groupOrder: [(key: String, label: String, color: Color)] = [
-    ("waiting", "Waiting on you", .orange),
+    ("waiting", "Waiting on you", Theme.brand),
     ("stuck", "Stuck or needs permission", .red),
     ("unsure", "Unclear", .gray),
     ("running", "Working", .blue),
@@ -103,7 +124,7 @@ struct PanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Claude chats").font(.system(size: 15, weight: .semibold))
+                Text("Claude chats").font(.system(size: 18, weight: .semibold))
                 Spacer()
                 if store.updating { ProgressView().controlSize(.small) }
                 Button { store.refresh() } label: { Image(systemName: "arrow.clockwise") }
@@ -111,14 +132,14 @@ struct PanelView: View {
                     .help("Refresh")
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
-            Divider()
+            Rectangle().fill(Theme.border).frame(height: 1)
             if let n = store.notice {
-                Text(n).font(.caption).padding(.horizontal, 16).padding(.vertical, 6)
+                Text(n).font(.system(size: 14)).padding(.horizontal, 16).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.accentColor.opacity(0.15))
             }
             if let e = store.error {
-                Text(e).font(.caption).foregroundStyle(.red).padding(16)
+                Text(e).font(.system(size: 14)).foregroundStyle(.red).padding(16)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
@@ -126,8 +147,8 @@ struct PanelView: View {
                         let items = store.chats.filter { $0.status == g.key }
                         if !items.isEmpty {
                             Text("\(g.label) · \(items.count)")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Theme.secondary)
                                 .textCase(.uppercase)
                                 .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 2)
                             ForEach(items) { c in Row(chat: c, color: g.color).onTapGesture { open(c) } }
@@ -137,6 +158,10 @@ struct PanelView: View {
                 .padding(.horizontal, 6).padding(.bottom, 12)
             }
         }
+        .foregroundStyle(Theme.text)
+        .background(Theme.bg)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
     }
 }
 
@@ -147,22 +172,31 @@ struct Row: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Circle().fill(color).frame(width: 8, height: 8).padding(.top, 5)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(chat.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+            Circle().fill(color).frame(width: 8, height: 8).padding(.top, 7)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(chat.title).font(.system(size: 16, weight: .medium)).lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(ageText(chat.age)).font(.caption).foregroundStyle(.secondary)
+                    Text(ageText(chat.age)).font(.system(size: 14)).foregroundStyle(Theme.secondary)
                 }
-                Text(chat.folder + (chat.app == "cli" ? " · terminal" : ""))
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(chat.folder)
+                        .font(.system(size: 14, design: .monospaced))
+                        .lineLimit(1).truncationMode(.middle)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
+                    if chat.app == "cli" {
+                        Text("terminal").font(.system(size: 14)).foregroundStyle(Theme.secondary)
+                    }
+                }
                 if !chat.why.isEmpty {
-                    Text(chat.why).font(.caption).foregroundStyle(.primary.opacity(0.8)).lineLimit(2)
+                    Text(chat.why).font(.system(size: 14)).foregroundStyle(Theme.text.opacity(0.85)).lineLimit(2)
                 }
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(hover ? 0.08 : 0)))
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.text.opacity(hover ? 0.06 : 0)))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
     }
@@ -182,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var edgeSince: Date?
     var shown = false
     var mouseWasInside = false
-    let width: CGFloat = 400
+    let width: CGFloat = 440
     let dwell: TimeInterval = 0.25  // how long the cursor must push the edge
 
     func applicationDidFinishLaunching(_ n: Notification) {
@@ -197,17 +231,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.hasShadow = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
-        let fx = NSVisualEffectView()
-        fx.material = .hudWindow
-        fx.blendingMode = .behindWindow
-        fx.state = .active
-        fx.wantsLayer = true
-        fx.layer?.cornerRadius = 14
-        fx.layer?.masksToBounds = true
-        let host = NSHostingView(rootView: PanelView(store: store, open: { [weak self] in self?.open($0) }))
-        host.autoresizingMask = [.width, .height]
-        fx.addSubview(host)
-        panel.contentView = fx
+        // Solid background comes from PanelView (Theme.bg), so the window itself stays clear.
+        panel.contentView = NSHostingView(rootView: PanelView(store: store, open: { [weak self] in self?.open($0) }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "bubble.left.and.text.bubble.right",
