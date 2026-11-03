@@ -19,7 +19,7 @@ struct Chat: Codable, Identifiable, Hashable {
     let app: String
     let desktop_id: String?
     let cwd: String?
-    let emoji: String?
+    var emoji: String?
 }
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
@@ -41,12 +41,13 @@ final class Store: ObservableObject {
     @Published var query = ""
     @Published var focusTick = 0  // bumped on each show to focus the search field
     var lastRun = Date.distantPast
+    var again = false
     let script: String
 
     init(script: String) { self.script = script }
 
     func refresh() {
-        if updating { return }
+        if updating { again = true; return }
         updating = true
         DispatchQueue.global(qos: .userInitiated).async {
             // Rules + cached verdicts first (fast), then the Haiku pass for new chats.
@@ -57,6 +58,7 @@ final class Store: ObservableObject {
                 self.apply(full)
                 self.updating = false
                 self.lastRun = Date()
+                if self.again { self.again = false; self.refresh() }
             }
         }
     }
@@ -120,13 +122,15 @@ enum Theme {
 
 // MARK: - Views
 
-// Status sets the card's icon tile: colour and SF Symbol.
+// Status sets the badge on the card's emoji tile: colour and SF Symbol.
 let statusStyle: [String: (color: Color, icon: String)] = [
-    "waiting": (Theme.brand, "questionmark.bubble"),
-    "stuck": (Color(nsColor: hsl(0, 55, 55)), "exclamationmark.triangle"),
-    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), "questionmark"),
-    "running": (Color(nsColor: hsl(210, 50, 52)), "ellipsis"),
-    "done": (Color(nsColor: hsl(120, 21, 45)), "checkmark"),
+    "running": (Color(nsColor: hsl(210, 60, 52)), "ellipsis"),
+    "waiting": (Color(nsColor: hsl(38, 92, 50)), "questionmark"),        // a question for you
+    "blocked": (Color(nsColor: hsl(0, 72, 52)), "xmark"),               // needs a click to carry on
+    "done": (Color(nsColor: hsl(120, 35, 42)), "checkmark"),
+    "finished": (.black, "archivebox.fill"),                             // ready to archive or delete
+    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), "exclamationmark"),
+    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), "circle.dotted"),
 ]
 
 // Sections come from recent_chats.py: touched in the last hour, then not-done
@@ -135,6 +139,7 @@ let sections: [(key: String, label: String)] = [
     ("active", "Active"),
     ("today", "Waiting · today"),
     ("older", "Waiting · older"),
+    ("clear", "Ready to clear"),
     ("done", "Done"),
 ]
 
@@ -148,7 +153,8 @@ func ageText(_ s: Double) -> String {
 struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
-    @State private var showDone = false
+    let editEmoji: (Chat) -> Void
+    @LocalState private var showDone = false
     @FocusState private var searchFocused: Bool
 
     // Every word must appear somewhere in title, folder or preview.
@@ -216,7 +222,11 @@ struct PanelView: View {
                             if !collapsible || showDone || !store.query.isEmpty {
                                 ForEach(items) { c in
                                     let st = statusStyle[c.status] ?? statusStyle["unsure"]!
-                                    Card(chat: c, color: st.color, icon: st.icon).onTapGesture { open(c) }
+                                    Card(chat: c, color: st.color, icon: st.icon)
+                                        .onTapGesture { open(c) }
+                                        .contextMenu {
+                                            Button("Change emoji…") { editEmoji(c) }
+                                        }
                                 }
                             }
                         }
@@ -232,26 +242,30 @@ struct PanelView: View {
     }
 }
 
+// Folder chip hidden for chats in this folder, since most live there.
+// Set with: defaults write com.jevawin.claude-swipe homeFolder <folder label>
+let homeFolder = UserDefaults.standard.string(forKey: "homeFolder") ?? ""
+
 // Notification-style card: icon tile, title with time top right, folder chip, preview.
 struct Card: View {
     let chat: Chat
     let color: Color
     let icon: String
-    @State private var hover = false
+    @LocalState private var hover = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // Status tile, with the folder emoji as a small badge on its corner.
-            RoundedRectangle(cornerRadius: 9).fill(color)
-                .overlay(Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
+            // Subject emoji tile, with the status as a small badge on its corner.
+            RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
+                .overlay(Text(chat.emoji.flatMap { $0.isEmpty ? nil : $0 } ?? "💬").font(.system(size: 19)))
                 .overlay(alignment: .bottomTrailing) {
-                    if let e = chat.emoji, !e.isEmpty {
-                        Circle().fill(Theme.cardHover)
-                            .frame(width: 20, height: 20)
-                            .overlay(Text(e).font(.system(size: 11)))
-                            .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                            .offset(x: 6, y: 6)
-                    }
+                    Circle().fill(color)
+                        .frame(width: 18, height: 18)
+                        .overlay(Image(systemName: icon).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+                        .overlay(Circle().strokeBorder(.white.opacity(chat.status == "finished" ? 0.6 : 0), lineWidth: 1))
+                        .overlay(Circle().stroke(Theme.card, lineWidth: 2))
+                        .offset(x: 6, y: 6)
                 }
             .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 0) {
@@ -261,12 +275,14 @@ struct Card: View {
                     Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 6) {
-                    Text(chat.folder)
-                        .font(.system(size: 12, design: .monospaced))
-                        .lineLimit(1).truncationMode(.middle)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
+                    if chat.folder != homeFolder {
+                        Text(chat.folder)
+                            .font(.system(size: 12, design: .monospaced))
+                            .lineLimit(1).truncationMode(.middle)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
+                    }
                     if chat.app == "cli" {
                         Text("terminal").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                     }
@@ -306,6 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let dwell: TimeInterval = 0.25  // how long the cursor must push the edge
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        debugLog("launched; accessibility allowed: \(AXIsProcessTrusted())")
         let script = Bundle.main.path(forResource: "recent_chats", ofType: "py")!
         store = Store(script: script)
 
@@ -318,7 +335,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
         // Solid background comes from PanelView (Theme.bg), so the window itself stays clear.
-        panel.contentView = NSHostingView(rootView: PanelView(store: store, open: { [weak self] in self?.open($0) }))
+        panel.contentView = NSHostingView(rootView: PanelView(
+            store: store, open: { [weak self] in self?.open($0) },
+            editEmoji: { [weak self] in self?.editEmoji($0) }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "bubble.left.and.text.bubble.right",
@@ -451,11 +470,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func open(_ c: Chat) {
+        // Option-click (or Option-Enter) leaves your other Claude windows where they are.
+        let keepOthers = NSEvent.modifierFlags.contains(.option)
         if let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") {
             hide()
             // The deep link always loads the chat in the main window, so first try to
             // raise a window already showing it (a pop-out, or the main window itself).
-            if !raiseClaudeWindow(titled: c.title) { NSWorkspace.shared.open(url) }
+            if let w = raiseClaudeWindow(titled: c.title) {
+                if !keepOthers { minimiseClaudeWindows(except: w) }
+            } else {
+                NSWorkspace.shared.open(url)
+                if !keepOthers {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                        guard let self, let ax = self.claudeAX(),
+                              let main = self.attribute(ax.element, kAXMainWindowAttribute) else { return }
+                        self.minimiseClaudeWindows(except: main as! AXUIElement)
+                    }
+                }
+            }
             return
         }
         // Terminal-only chat: copy a resume command instead.
@@ -465,34 +497,105 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.notice = "Copied resume command for “\(c.title)”. Paste it in a terminal."
     }
 
-    // Finds a Claude window whose title is the chat's title and brings it to the front.
-    // Needs Accessibility permission; asks once, then falls back to the deep link.
-    // Unverified: that pop-out windows are titled with the chat title. Titles are
-    // logged (log show --predicate 'process == "ClaudeSwipe"') to check.
-    func raiseClaudeWindow(titled title: String) -> Bool {
+    // The Claude desktop app as an Accessibility element. Needs Accessibility
+    // permission; asks once, then returns nil until it's granted.
+    func claudeAX() -> (app: NSRunningApplication, element: AXUIElement)? {
         let opts = ["AXTrustedCheckOptionPrompt": !UserDefaults.standard.bool(forKey: "axPrompted")] as CFDictionary
         guard AXIsProcessTrustedWithOptions(opts) else {
+            debugLog("accessibility: not allowed")
             UserDefaults.standard.set(true, forKey: "axPrompted")
-            return false
+            return nil
         }
         guard let app = NSRunningApplication.runningApplications(
-            withBundleIdentifier: "com.anthropic.claudefordesktop").first else { return false }
-        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+            withBundleIdentifier: "com.anthropic.claudefordesktop").first else { return nil }
+        return (app, AXUIElementCreateApplication(app.processIdentifier))
+    }
+
+    func attribute(_ e: AXUIElement, _ name: String) -> CFTypeRef? {
         var ref: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &ref) == .success,
-              let windows = ref as? [AXUIElement] else { return false }
-        let titles = windows.map { w -> String in
-            var t: CFTypeRef?
-            AXUIElementCopyAttributeValue(w, kAXTitleAttribute as CFString, &t)
-            return (t as? String) ?? ""
+        return AXUIElementCopyAttributeValue(e, name as CFString, &ref) == .success ? ref : nil
+    }
+
+    func claudeWindows(_ ax: AXUIElement) -> [AXUIElement] {
+        (attribute(ax, kAXWindowsAttribute) as? [AXUIElement] ?? []).filter {
+            attribute($0, kAXSubroleAttribute) as? String == kAXStandardWindowSubrole
         }
-        debugLog("windows \(titles) looking for \(title)")
+    }
+
+    // Finds a Claude window whose title is the chat's title (pop-outs are titled
+    // with the chat title; the main window is "Claude") and brings it to the front.
+    func raiseClaudeWindow(titled title: String) -> AXUIElement? {
+        guard let ax = claudeAX() else { return nil }
+        let windows = claudeWindows(ax.element)
+        let titles = windows.map { (attribute($0, kAXTitleAttribute) as? String) ?? "" }
         let want = title.lowercased()
-        guard let i = titles.firstIndex(where: { $0.lowercased() == want })
-            ?? titles.firstIndex(where: { !want.isEmpty && $0.lowercased().contains(want) }) else { return false }
+        let match = titles.firstIndex(where: { $0.lowercased() == want })
+            ?? titles.firstIndex(where: { !want.isEmpty && $0.lowercased().contains(want) })
+        debugLog("looking for \(title.debugDescription) in \(titles.map { $0.debugDescription }) -> \(match.map(String.init) ?? "no match")")
+        guard let i = match else { return nil }
+        AXUIElementSetAttributeValue(windows[i], kAXMinimizedAttribute as CFString, kCFBooleanFalse)
         AXUIElementPerformAction(windows[i], kAXRaiseAction as CFString)
-        app.activate()
-        return true
+        ax.app.activate()
+        return windows[i]
+    }
+
+    // Sends every other Claude window to the Dock.
+    func minimiseClaudeWindows(except keep: AXUIElement) {
+        guard let ax = claudeAX() else { return }
+        for w in claudeWindows(ax.element) where !CFEqual(w, keep) {
+            if attribute(w, kAXMinimizedAttribute) as? Bool == true { continue }
+            AXUIElementSetAttributeValue(w, kAXMinimizedAttribute as CFString, kCFBooleanTrue)
+        }
+    }
+
+    // Right-click > Change emoji. Saves to chat-emoji.json "overrides", which beat Haiku's picks.
+    func editEmoji(_ c: Chat) {
+        hide()
+        let file = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/claude-swipe/chat-emoji.json")
+        var data = (try? JSONSerialization.jsonObject(with: Data(contentsOf: file))) as? [String: Any] ?? [:]
+        var overrides = data["overrides"] as? [String: String] ?? [:]
+        let auto = data["auto"] as? [String: String] ?? [:]
+
+        let alert = NSAlert()
+        alert.messageText = "Emoji for “\(c.title)”"
+        alert.informativeText = "Type or pick one emoji. The emoji picker opens with it; Control-Command-Space reopens it."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        if overrides[c.id] != nil { alert.addButton(withTitle: "Use Haiku’s pick") }
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 28))
+        field.font = .systemFont(ofSize: 18)
+        field.stringValue = c.emoji ?? ""
+        alert.accessoryView = field
+        alert.layout()
+        alert.window.initialFirstResponder = field
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            alert.window.makeFirstResponder(field)
+            NSApp.orderFrontCharacterPalette(nil)
+        }
+        let choice = alert.runModal()
+
+        var newEmoji: String?
+        switch choice {
+        case .alertFirstButtonReturn:
+            guard let first = field.stringValue.trimmingCharacters(in: .whitespaces).first else { return }
+            newEmoji = String(first)
+            overrides[c.id] = newEmoji
+        case .alertThirdButtonReturn:
+            overrides[c.id] = nil
+            newEmoji = auto[c.id]
+        default:
+            return
+        }
+        data["overrides"] = overrides
+        data["auto"] = auto
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let out = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted]) {
+            try? out.write(to: file)
+        }
+        if let i = store.chats.firstIndex(where: { $0.id == c.id }) { store.chats[i].emoji = newEmoji }
+        store.refresh()
     }
 
     func registerHotKey() {
@@ -522,4 +625,15 @@ enum Main {
         app.delegate = delegate
         app.run()
     }
+}
+
+// Non-macro stand-in for @State (Command Line Tools ship without the SwiftUIMacros plugin).
+@propertyWrapper struct LocalState<Value>: DynamicProperty {
+    private let s: State<Value>
+    init(wrappedValue: Value) { s = State(initialValue: wrappedValue) }
+    var wrappedValue: Value {
+        get { s.wrappedValue }
+        nonmutating set { s.wrappedValue = newValue }
+    }
+    var projectedValue: Binding<Value> { s.projectedValue }
 }
