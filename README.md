@@ -48,7 +48,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 
 ## Two optional extras
 
-**Jump to the right window** needs Accessibility permission. With it, clicking a chat that's already open in its own window brings that window to the front. Without it, the chat opens in the main Claude window. Allow it from the welcome screen or Settings › Windows.
+**Jump to the right window** needs Accessibility permission. With it, clicking a chat that's already open in its own window brings that window to the front. Without it, the chat opens in the main Claude window. Allow it from the welcome screen or Settings › Windows. On macOS 27 it lives in System Settings › Privacy & Security › Device Control and Data Access; older macOS calls it Accessibility.
 
 **AI features are off until you turn them on.** They use your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your `claude` command-line login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan. You need the `claude` command installed and signed in; Settings › AI shows whether it is.
 
@@ -56,7 +56,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 
 - It reads Claude's local chat files. The file formats aren't documented, so a Claude update could break it.
 - Results the AI already gave stay cached and still show if you turn a switch off. Turning it off only stops new requests.
-- After a rebuild, macOS may forget the Accessibility permission. Turn ClaudeSwipe off and on again in System Settings → Privacy and Security → Accessibility.
+- Without a signing certificate, every rebuild makes macOS forget the window permission. Run `./make-cert.sh` once: it adds a "ClaudeSwipe Local" certificate to your login keychain, and `build.sh` signs with it from then on. Then grant the permission one last time.
 - To set a folder's emoji by hand, edit `~/Library/Application Support/claude-swipe/folder-emoji.json` under `"overrides"`. A key covers that folder and everything under it. These work with AI off.
 - Folder names are shown relative to `~/Developer` when chats live there.
 - `recent_chats.py` runs on its own too: `python3 recent_chats.py` lists your chats in a terminal and sends no requests. Add `--sort`, `--emoji subject` or `--clear` to use AI; `--help` lists the rest.
