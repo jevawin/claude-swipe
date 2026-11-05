@@ -8,6 +8,7 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Push the cursor into the right edge / Hold it there for a moment and the panel slides out
 - Press Control-Option-C / Works from any app. Press again to close.
 - Click the menu bar icon / Settings are there too
+- Privacy note: Your chats stay on your Mac. ClaudeSwipe reads Claude's chat files on this Mac, has no servers of its own, and sends nothing anywhere unless you turn on the AI features. (Also at the bottom of Settings › General.)
 - Button: Continue
 
 ## Welcome step 2
@@ -16,13 +17,15 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Block 1 title: Jump to the right window
 - Block 1 body: If a chat is already open in its own window, clicking it brings that window to the front. Without this, the chat opens in the main Claude window instead.
 - Picture captions: Before: chat hidden behind other windows / After: chat in front
-- Needs line: Needs a Mac permission, so ClaudeSwipe can bring windows to the front. Turn on ClaudeSwipe in System Settings › Privacy & Security › Device Control and Data Access (called Accessibility on older macOS). / Button: Open System Settings
-- Needs line (allowed): Permission allowed. ClaudeSwipe can bring windows to the front. / Label: Allowed
+- Button: Open System Settings, with a status light next to it: Window permission allowed / Window permission not allowed
+- Below the button: Needs a Mac permission. Turn on ClaudeSwipe in System Settings › Privacy & Security › Device Control and Data Access (called Accessibility on older macOS).
+- Privacy note: ClaudeSwipe only uses this to find, raise and minimise Claude's windows. It reads their titles, never what is in them.
 - Sub-switch: Also minimise other Claude windows / When you open a chat, every other Claude window goes to the Dock. Hold Option while you click a chat to flip this setting for that one click.
 - Block 2 title: Sort unclear chats and pick emoji
 - Block 2 body: Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.
 - Picture captions: Before: chat marked unsure, no emoji / After: chat sorted, with an emoji
 - Warning: This uses your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan.
+- Privacy note: ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.
 - Status lines: claude command found and signed in / claude command found but not signed in / claude command not found
 - Switch: Use my Claude plan / Off until you turn it on. Pick the model and more in Settings › AI.
 - Buttons: Back / Continue

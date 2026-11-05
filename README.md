@@ -57,6 +57,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 - It reads Claude's local chat files. The file formats aren't documented, so a Claude update could break it.
 - Results the AI already gave stay cached and still show if you turn a switch off. Turning it off only stops new requests.
 - Without a signing certificate, every rebuild makes macOS forget the window permission. Run `./make-cert.sh` once: it adds a "ClaudeSwipe Local" certificate to your login keychain, and `build.sh` signs with it from then on. Then grant the permission one last time.
+- If the permission still won't stick, look for other copies of ClaudeSwipe.app, such as a `build/` folder in another checkout. They share an ID, and System Settings may record the wrong copy. Delete them, run `tccutil reset Accessibility com.jevawin.claude-swipe`, and grant it again.
 - To set a folder's emoji by hand, edit `~/Library/Application Support/claude-swipe/folder-emoji.json` under `"overrides"`. A key covers that folder and everything under it. These work with AI off.
 - Folder names are shown relative to `~/Developer` when chats live there.
 - `recent_chats.py` runs on its own too: `python3 recent_chats.py` lists your chats in a terminal and sends no requests. Add `--sort`, `--emoji subject` or `--clear` to use AI; `--help` lists the rest.

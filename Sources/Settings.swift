@@ -182,21 +182,50 @@ struct WarningBox: View {
     }
 }
 
+// Green or red light with a short state, e.g. "claude command found and signed in".
+struct StatusLight: View {
+    let ok: Bool
+    let text: String
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(ok ? statusStyle["done"]!.color : statusStyle["blocked"]!.color)
+                .frame(width: 8, height: 8).accessibilityHidden(true)
+            Text(text).font(.system(size: 12)).foregroundStyle(Theme.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct ClaudeStatusLine: View {
     let state: ClaudeCLI
     var body: some View {
         if state != .unknown {
-            HStack(spacing: 8) {
-                Circle().fill(state == .ready ? statusStyle["done"]!.color : statusStyle["blocked"]!.color)
-                    .frame(width: 8, height: 8).accessibilityHidden(true)
-                Text(state == .ready ? "claude command found and signed in"
-                     : state == .signedOut ? "claude command found but not signed in"
-                     : "claude command not found")
-                    .font(.system(size: 12)).foregroundStyle(Theme.secondary)
-            }
+            StatusLight(ok: state == .ready, text: state == .ready ? "claude command found and signed in"
+                        : state == .signedOut ? "claude command found but not signed in"
+                        : "claude command not found")
         }
     }
 }
+
+// Neutral privacy callout with a padlock, next to the warnings.
+struct PrivacyNote: View {
+    let text: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lock").font(.system(size: 12)).padding(.top, 1).accessibilityHidden(true)
+            Text(text).font(.system(size: 12)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Theme.text.opacity(0.85))
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.cardHover))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Privacy: \(text)")
+    }
+}
+
+let privacyLocal = "Your chats stay on your Mac. ClaudeSwipe reads Claude's chat files on this Mac, has no servers of its own, and sends nothing anywhere unless you turn on the AI features."
 
 // A labelled setting: title and helper text on the left, the control on the right.
 struct Row<Control: View>: View {
@@ -318,6 +347,7 @@ struct SettingsView: View {
     }
 
     var general: some View {
+        VStack(alignment: .leading, spacing: 14) {
         Group_ {
             Row(title: "Theme") {
                 Picker("Theme", selection: $prefs.theme) {
@@ -334,6 +364,8 @@ struct SettingsView: View {
             Row(title: "Welcome screen") {
                 Button("Show again") { actions.showWelcome() }
             }
+        }
+        PrivacyNote(text: privacyLocal)
         }
     }
 
@@ -510,6 +542,7 @@ struct WelcomeView: View {
                     way("bubble.left.and.text.bubble.right")
                 }
             }
+            PrivacyNote(text: privacyLocal)
         }
     }
 
@@ -569,20 +602,14 @@ struct JumpBlock: View {
                          caption: "After: chat in front")
                 }
                 HStack(spacing: 12) {
-                    Text(status.axAllowed
-                         ? "Permission allowed. ClaudeSwipe can bring windows to the front."
-                         : "Needs a Mac permission, so ClaudeSwipe can bring windows to the front. Turn on ClaudeSwipe in \(permissionPath).")
-                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if status.axAllowed {
-                        Label("Allowed", systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(statusStyle["done"]!.color)
-                    } else {
-                        Button("Open System Settings") { openAccessibilitySettings() }
-                    }
+                    Button("Open System Settings") { openAccessibilitySettings() }
+                    StatusLight(ok: status.axAllowed, text: status.axAllowed
+                                ? "Window permission allowed" : "Window permission not allowed")
                 }
+                Text("Needs a Mac permission. Turn on ClaudeSwipe in \(permissionPath).")
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                PrivacyNote(text: "ClaudeSwipe only uses this to find, raise and minimise Claude's windows. It reads their titles, never what is in them.")
             }
             .padding(14)
             Hairline()
@@ -609,6 +636,7 @@ struct AIIntro: View {
                          caption: "After: chat sorted, with an emoji")
             }
             WarningBox(text: warning)
+            PrivacyNote(text: "ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.")
             ClaudeStatusLine(state: status.claude)
         }
         .padding(14)
