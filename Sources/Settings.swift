@@ -391,7 +391,7 @@ struct SettingsView: View {
 
     var sampleChat: Chat {
         Chat(id: "preview", status: "waiting", why: "Want me to send the draft to the team now?",
-             title: "Write the launch post", folder: prefs.homeFolder.isEmpty ? "personal/blog" : prefs.homeFolder + "-other",
+             title: "Write the launch post", folder: "clients/acme",
              age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
              emoji: "✍️", own_emoji: nil)
     }
