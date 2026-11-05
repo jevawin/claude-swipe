@@ -263,10 +263,16 @@ struct Hairline: View {
     var body: some View { Rectangle().fill(Theme.border).frame(height: 1) }
 }
 
+// First click per launch: macOS's own prompt, which adds ClaudeSwipe to the list and
+// has its own Open System Settings button. Later clicks open the pane directly.
+// Doing both at once showed the prompt and the pane together.
+private var promptedThisLaunch = false
 func openAccessibilitySettings() {
-    // Prompts once (adds ClaudeSwipe to the list), then opens the pane.
-    _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-    UserDefaults.standard.set(true, forKey: "axPrompted")
+    if !promptedThisLaunch {
+        promptedThisLaunch = true
+        UserDefaults.standard.set(true, forKey: "axPrompted")
+        if !AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary) { return }
+    }
     if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
         NSWorkspace.shared.open(u)
     }
