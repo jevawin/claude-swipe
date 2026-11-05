@@ -212,9 +212,10 @@ def save_json(path, data):
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False))
 
 
-def chat_extras(rows, info, cache, pick_emoji, clear, repick):
+def chat_extras(rows, info, cache, pick_emoji, clear, judge_new, repick):
     """Per-chat subject emoji (picked once; your overrides win) and, with
-    clear, whether a done chat's whole piece of work is finished.
+    clear, whether a done chat's whole piece of work is finished. Cached
+    finished verdicts apply whenever clear is on; judge_new asks about the rest.
     Finished verdicts are cached per transcript mtime, like status verdicts.
     Returns {id: emoji} for the subject source (your picks, then auto)."""
     data = load_chat_emoji()
@@ -230,7 +231,7 @@ def chat_extras(rows, info, cache, pick_emoji, clear, repick):
         if clear and r["status"] == "done" and cache.get(fkey):
             r["status"] = "finished"
         pick = pick_emoji and r["id"] not in data["overrides"] and r["id"] not in data["auto"]
-        judge = clear and r["status"] == "done" and fkey not in cache
+        judge = clear and judge_new and r["status"] == "done" and fkey not in cache
         if pick or judge:
             item = {"id": r["id"], "title": r["title"],
                     "opening": info[r["id"]]["opening"][:300],
@@ -400,7 +401,7 @@ def main():
                 cache[key] = [row["status"], row["why"]]
 
     auto, chat_over, asked = chat_extras(rows, info, cache, ai and args.emoji == "subject",
-                                         ai and args.clear, args.repick)
+                                         args.clear, ai, args.repick)
     if source == "folder":
         fe = folder_emojis({r["folder"] for r in rows}, ai and args.emoji == "folder", args.repick)
     for r in rows:
