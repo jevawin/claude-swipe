@@ -7,11 +7,14 @@ Sources (both undocumented, read-only):
 - ~/Library/Application Support/Claude/claude-code-sessions/*/*/local_*.json
   desktop app metadata: title, cwd, isArchived, cliSessionId
 
-Rules decide most chats. Ones the rules can't call go to Haiku in one batch
-via `claude -p --model haiku --no-session-persistence`. Verdicts are cached
-per transcript mtime, so re-runs only ask about changed chats.
+Rules decide most chats. With --sort, ones the rules can't call go to the
+model in one batch via `claude -p --model <model> --no-session-persistence`.
+Verdicts are cached per transcript mtime, so re-runs only ask about changed
+chats. Every AI call is opt-in: a bare run sends no requests.
 
-Usage: recent_chats.py [--days N] [--no-ai] [--json]
+Usage: recent_chats.py [--days N] [--json] [--model haiku|sonnet] [--sort]
+       [--emoji off|subject|folder] [--emoji-from subject|folder] [--clear]
+       [--repick] [--no-ai]
 """
 import argparse, glob, json, os, subprocess, sys, time
 from pathlib import Path
@@ -21,6 +24,8 @@ PROJECTS = Path(HOME, ".claude/projects")
 DESKTOP = Path(HOME, "Library/Application Support/Claude/claude-code-sessions")
 CACHE = Path(HOME, "Library/Caches/claude-swipe/verdicts.json")
 CHAT_EMOJI = Path(HOME, "Library/Application Support/claude-swipe/chat-emoji.json")  # "overrides" set from the panel
+FOLDER_EMOJI = Path(HOME, "Library/Application Support/claude-swipe/folder-emoji.json")  # edit "overrides" to taste
+MODEL = "haiku"  # set from --model
 HAIKU_BATCH = 30
 RUNNING_SECS = 90  # tool call or prompt with no reply younger than this = still working
 
@@ -174,7 +179,7 @@ def ask_haiku(items):
 
 def haiku(prompt):
     res = subprocess.run(
-        ["claude", "-p", "--model", "haiku", "--no-session-persistence",
+        ["claude", "-p", "--model", MODEL, "--no-session-persistence",
          "--output-format", "text"],
         input=prompt, capture_output=True, text=True, timeout=180)
     return res.stdout.strip()
@@ -202,19 +207,31 @@ def load_chat_emoji():
     return {"overrides": d.get("overrides", {}), "auto": d.get("auto", {})}
 
 
-def chat_extras(rows, info, cache, use_ai):
-    """Per-chat subject emoji (picked once; your overrides win) and, for done
-    chats, whether the whole piece of work is finished and ready to clear.
-    Finished verdicts are cached per transcript mtime, like status verdicts."""
+def save_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False))
+
+
+def chat_extras(rows, info, cache, pick_emoji, clear, repick):
+    """Per-chat subject emoji (picked once; your overrides win) and, with
+    clear, whether a done chat's whole piece of work is finished.
+    Finished verdicts are cached per transcript mtime, like status verdicts.
+    Returns {id: emoji} for the subject source (your picks, then auto)."""
     data = load_chat_emoji()
+    if repick and pick_emoji:
+        ids = {r["id"] for r in rows}
+        data["auto"] = {k: v for k, v in data["auto"].items() if k not in ids}
+        fresh = load_chat_emoji()
+        fresh["auto"] = {k: v for k, v in fresh["auto"].items() if k not in ids}
+        save_json(CHAT_EMOJI, fresh)
     todo = []
     for r in rows:
         fkey = "fin:" + info[r["id"]]["key"]
-        if r["status"] == "done" and cache.get(fkey):
+        if clear and r["status"] == "done" and cache.get(fkey):
             r["status"] = "finished"
-        pick = r["id"] not in data["overrides"] and r["id"] not in data["auto"]
-        judge = r["status"] == "done" and fkey not in cache
-        if use_ai and (pick or judge):
+        pick = pick_emoji and r["id"] not in data["overrides"] and r["id"] not in data["auto"]
+        judge = clear and r["status"] == "done" and fkey not in cache
+        if pick or judge:
             item = {"id": r["id"], "title": r["title"],
                     "opening": info[r["id"]]["opening"][:300],
                     "pick_emoji": pick, "judge_finished": judge}
@@ -244,7 +261,7 @@ def chat_extras(rows, info, cache, use_ai):
             raw = haiku(prompt)
             out = {x["id"]: x for x in json.loads(raw[raw.find("["): raw.rfind("]") + 1])}
         except Exception as e:
-            print(f"[haiku extras failed: {e}]", file=sys.stderr)
+            print(f"[ai extras failed: {e}]", file=sys.stderr)
             continue
         for r, fkey, item in batch:
             x = out.get(r["id"], {})
@@ -259,12 +276,46 @@ def chat_extras(rows, info, cache, use_ai):
         # Re-read first so an override set from the panel meanwhile isn't lost.
         fresh = load_chat_emoji()
         fresh["auto"].update(picked)
-        CHAT_EMOJI.parent.mkdir(parents=True, exist_ok=True)
-        CHAT_EMOJI.write_text(json.dumps(fresh, indent=1, ensure_ascii=False))
+        save_json(CHAT_EMOJI, fresh)
         data = fresh
-    for r in rows:
-        r["emoji"] = data["overrides"].get(r["id"]) or data["auto"].get(r["id"])
-    return bool(todo)
+    return {r["id"]: data["auto"].get(r["id"]) for r in rows}, data["overrides"], bool(todo)
+
+
+def folder_emojis(folders, use_ai, repick):
+    """folder label -> (emoji, yours). Your overrides win (longest prefix
+    match), then AI picks, which are cached so each folder is asked about once."""
+    data = json.loads(FOLDER_EMOJI.read_text()) if FOLDER_EMOJI.exists() else {
+        "overrides": {"(no folder)": "💭"}, "auto": {}}
+    over, auto = data.setdefault("overrides", {}), data.setdefault("auto", {})
+
+    def from_override(f):
+        hits = [k for k in over if f == k or f.startswith(k + "/")]
+        return over[max(hits, key=len)] if hits else None
+
+    if repick and use_ai:
+        for f in folders:
+            auto.pop(f, None)
+        save_json(FOLDER_EMOJI, data)
+    missing = sorted({f for f in folders if not from_override(f) and f not in auto})
+    if missing and use_ai:
+        prompt = (
+            "Pick one emoji for each project folder so a person can spot it at a glance. "
+            "Folders under clients/ are client brands: evoke the brand name literally "
+            "(blue-heron -> a bird, red-fox -> a fox). Personal projects: "
+            "evoke what the name suggests. Avoid giving two folders the same emoji. "
+            "Reply with ONLY a JSON object of {folder: emoji}.\n\n" + json.dumps(missing))
+        try:
+            raw = haiku(prompt)
+            auto.update({k: v for k, v in json.loads(raw[raw.find("{"): raw.rfind("}") + 1]).items()
+                         if k in missing})
+            save_json(FOLDER_EMOJI, data)
+        except Exception as e:
+            print(f"[ai folder emoji failed: {e}]", file=sys.stderr)
+    out = {}
+    for f in folders:
+        o = from_override(f)
+        out[f] = (o, True) if o else (auto.get(f), False)
+    return out
 
 
 def folder_label(cwd, branch):
@@ -285,9 +336,21 @@ def folder_label(cwd, branch):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=float, default=7)
-    ap.add_argument("--no-ai", action="store_true")
+    ap.add_argument("--no-ai", action="store_true", help="send no requests, whatever else is set")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--model", choices=["haiku", "sonnet"], default="haiku")
+    ap.add_argument("--sort", action="store_true", help="AI decides chats the rules can't")
+    ap.add_argument("--emoji", choices=["off", "subject", "folder"], default="off",
+                    help="which emoji the AI picks")
+    ap.add_argument("--emoji-from", choices=["subject", "folder"], default=None,
+                    help="which saved emoji to show (default: --emoji, else subject)")
+    ap.add_argument("--clear", action="store_true", help="AI marks done chats that are ready to clear")
+    ap.add_argument("--repick", action="store_true", help="forget AI emoji picks in the window first")
     args = ap.parse_args()
+    global MODEL
+    MODEL = args.model
+    ai = not args.no_ai
+    source = args.emoji if args.emoji != "off" else (args.emoji_from or "subject")
 
     now = time.time()
     meta = desktop_meta()
@@ -324,7 +387,7 @@ def main():
         if needs_ai:
             if key in cache:
                 row["status"], row["why"] = cache[key]
-            elif not args.no_ai:
+            elif ai and args.sort:
                 todo.append((row, key, {"id": sid, "title": title, **ctx}))
         rows.append(row)
 
@@ -336,7 +399,18 @@ def main():
                 row["why"] = "(ai) " + row["why"]
                 cache[key] = [row["status"], row["why"]]
 
-    asked = chat_extras(rows, info, cache, not args.no_ai)
+    auto, chat_over, asked = chat_extras(rows, info, cache, ai and args.emoji == "subject",
+                                         ai and args.clear, args.repick)
+    if source == "folder":
+        fe = folder_emojis({r["folder"] for r in rows}, ai and args.emoji == "folder", args.repick)
+    for r in rows:
+        # A per-chat pick from the panel beats everything.
+        if r["id"] in chat_over:
+            r["emoji"], r["own_emoji"] = chat_over[r["id"]], True
+        elif source == "folder":
+            r["emoji"], r["own_emoji"] = fe[r["folder"]]
+        else:
+            r["emoji"], r["own_emoji"] = auto.get(r["id"]), False
     if todo or asked:
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_text(json.dumps(cache))

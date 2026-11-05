@@ -20,6 +20,7 @@ struct Chat: Codable, Identifiable, Hashable {
     let desktop_id: String?
     let cwd: String?
     var emoji: String?
+    var own_emoji: Bool?  // your own pick decides the emoji (counted for Re-pick)
 }
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
@@ -46,14 +47,17 @@ final class Store: ObservableObject {
 
     init(script: String) { self.script = script }
 
-    func refresh() {
+    func refresh(repick: Bool = false) {
         if updating { again = true; return }
         updating = true
+        let base = ["--json"] + Prefs.shared.scriptArgs
+        let ai = Prefs.shared.anyAI || repick
         DispatchQueue.global(qos: .userInitiated).async {
-            // Rules + cached verdicts first (fast), then the Haiku pass for new chats.
-            let fast = Store.run(self.script, ["--json", "--no-ai"])
+            // Rules + cached verdicts first (fast), then, only if an AI setting is on,
+            // the pass that asks about new chats.
+            let fast = Store.run(self.script, base + ["--no-ai"])
             DispatchQueue.main.async { self.apply(fast) }
-            let full = Store.run(self.script, ["--json"])
+            let full = ai ? Store.run(self.script, base + (repick ? ["--repick"] : [])) : fast
             DispatchQueue.main.async {
                 self.apply(full)
                 self.updating = false
@@ -118,17 +122,18 @@ enum Theme {
     static let brand = Color(nsColor: hsl(15, 63.1, 59.6))                  // --accent-brand
     static let card = themed(.white, hsl(60, 2.1, 18.4))                    // --bg-000
     static let cardHover = themed(hsl(53, 28.6, 94.5), hsl(60, 2.1, 21))
+    static let sidebar = themed(hsl(50, 25, 92), hsl(60, 2.5, 12.5))
 }
 
 // MARK: - Views
 
-// Status sets the badge on the card's emoji tile: colour and SF Symbol.
+// Status sets the card's tile (or its badge): colour, SF Symbol and a spoken name.
 let statusStyle: [String: (color: Color, icon: String)] = [
     "running": (Color(nsColor: hsl(210, 60, 52)), "ellipsis"),
     "waiting": (Color(nsColor: hsl(38, 92, 50)), "questionmark"),        // a question for you
     "blocked": (Color(nsColor: hsl(0, 72, 52)), "xmark"),               // needs a click to carry on
     "done": (Color(nsColor: hsl(120, 35, 42)), "checkmark"),
-    "finished": (.black, "archivebox.fill"),                             // ready to archive or delete
+    "finished": (Color(nsColor: hsl(262, 45, 58)), "archivebox.fill"),   // ready to archive or delete
     "stuck": (Color(nsColor: hsl(48, 4.8, 50)), "exclamationmark"),
     "unsure": (Color(nsColor: hsl(48, 4.8, 50)), "circle.dotted"),
 ]
@@ -143,6 +148,11 @@ let sections: [(key: String, label: String)] = [
     ("done", "Done"),
 ]
 
+let statusName: [String: String] = [
+    "running": "Running", "waiting": "Waiting for you", "blocked": "Blocked", "done": "Done",
+    "finished": "Ready to clear", "stuck": "Stuck", "unsure": "Unsure",
+]
+
 func ageText(_ s: Double) -> String {
     let s = max(0, s)
     if s < 3600 { return "\(Int(s / 60))m" }
@@ -154,6 +164,7 @@ struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
     let editEmoji: (Chat) -> Void
+    let openSettings: () -> Void
     @LocalState private var showDone = false
     @FocusState private var searchFocused: Bool
 
@@ -176,6 +187,11 @@ struct PanelView: View {
                 Button { store.refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .buttonStyle(.borderless)
                     .help("Refresh")
+                    .accessibilityLabel("Refresh")
+                Button { openSettings() } label: { Settings2Image() }
+                    .buttonStyle(.borderless)
+                    .help("Settings")
+                    .accessibilityLabel("Settings")
             }
             .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
             HStack(spacing: 6) {
@@ -221,8 +237,7 @@ struct PanelView: View {
                             .onTapGesture { if collapsible { showDone.toggle() } }
                             if !collapsible || showDone || !store.query.isEmpty {
                                 ForEach(items) { c in
-                                    let st = statusStyle[c.status] ?? statusStyle["unsure"]!
-                                    Card(chat: c, color: st.color, icon: st.icon)
+                                    Card(chat: c)
                                         .onTapGesture { open(c) }
                                         .contextMenu {
                                             Button("Change emoji…") { editEmoji(c) }
@@ -242,32 +257,50 @@ struct PanelView: View {
     }
 }
 
-// Folder chip hidden for chats in this folder, since most live there.
-// Set with: defaults write com.jevawin.claude-swipe homeFolder <folder label>
-let homeFolder = UserDefaults.standard.string(forKey: "homeFolder") ?? ""
-
 // Notification-style card: icon tile, title with time top right, folder chip, preview.
 struct Card: View {
     let chat: Chat
-    let color: Color
-    let icon: String
+    @ObservedObject var prefs = Prefs.shared
     @LocalState private var hover = false
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            // Subject emoji tile, with the status as a small badge on its corner.
+    var emoji: String? { prefs.showEmoji ? chat.emoji.flatMap { $0.isEmpty ? nil : $0 } : nil }
+
+    // Settings › Cards › Card icon. "status": status tile with the emoji as a badge
+    // (no emoji, no badge). "emoji": emoji tile (💬 if none) with the status as a badge.
+    @ViewBuilder var tile: some View {
+        let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
+        if prefs.showEmoji && prefs.cardIcon == "emoji" {
             RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
-                .overlay(Text(chat.emoji.flatMap { $0.isEmpty ? nil : $0 } ?? "💬").font(.system(size: 19)))
+                .overlay(Text(emoji ?? "💬").font(.system(size: 19)))
                 .overlay(alignment: .bottomTrailing) {
-                    Circle().fill(color)
+                    Circle().fill(st.color)
                         .frame(width: 18, height: 18)
-                        .overlay(Image(systemName: icon).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                        .overlay(Circle().strokeBorder(.white.opacity(chat.status == "finished" ? 0.6 : 0), lineWidth: 1))
+                        .overlay(Image(systemName: st.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
                         .overlay(Circle().stroke(Theme.card, lineWidth: 2))
                         .offset(x: 6, y: 6)
                 }
-            .frame(width: 34, height: 34)
+        } else {
+            RoundedRectangle(cornerRadius: 9).fill(st.color)
+                .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
+                .overlay(alignment: .bottomTrailing) {
+                    if let e = emoji {
+                        Circle().fill(Theme.cardHover)
+                            .frame(width: 20, height: 20)
+                            .overlay(Text(e).font(.system(size: 11)))
+                            .overlay(Circle().stroke(Theme.card, lineWidth: 2))
+                            .offset(x: 6, y: 6)
+                    }
+                }
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            tile
+                .frame(width: 34, height: 34)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(statusName[chat.status] ?? "Unsure")
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
@@ -275,7 +308,7 @@ struct Card: View {
                     Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 6) {
-                    if chat.folder != homeFolder {
+                    if chat.folder != prefs.homeFolder {
                         Text(chat.folder)
                             .font(.system(size: 12, design: .monospaced))
                             .lineLimit(1).truncationMode(.middle)
@@ -309,9 +342,12 @@ final class Panel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var panel: Panel!
     var store: Store!
+    let status = SystemStatus()
+    var settingsWindow: NSWindow?
+    var welcomeWindow: NSWindow?
     var statusItem: NSStatusItem!
     var loginItem: NSMenuItem!
     var edgeSince: Date?
@@ -325,6 +361,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         debugLog("launched; accessibility allowed: \(AXIsProcessTrusted())")
         let script = Bundle.main.path(forResource: "recent_chats", ofType: "py")!
         store = Store(script: script)
+        Prefs.shared.applyTheme()
+        Prefs.shared.onScriptChange = { [weak self] in self?.store.refresh() }
 
         panel = Panel(contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless],
                       backing: .buffered, defer: false)
@@ -337,7 +375,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Solid background comes from PanelView (Theme.bg), so the window itself stays clear.
         panel.contentView = NSHostingView(rootView: PanelView(
             store: store, open: { [weak self] in self?.open($0) },
-            editEmoji: { [weak self] in self?.editEmoji($0) }))
+            editEmoji: { [weak self] in self?.editEmoji($0) },
+            openSettings: { [weak self] in self?.openSettings() }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "bubble.left.and.text.bubble.right",
@@ -347,6 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // which an accessory app with no key window may not route to the delegate.
         menu.addItem(withTitle: "Show chats (⌃⌥C)", action: #selector(menuShow), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         loginItem = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLogin), keyEquivalent: "")
         loginItem.target = self
         menu.addItem(.separator())
@@ -359,7 +399,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.hide(reason: "click elsewhere")
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
-            if e.keyCode == UInt16(kVK_Escape) {
+            // ⌘, opens Settings from the panel (the menu's shortcut only works while the menu is open).
+            if e.modifierFlags.contains(.command) && e.charactersIgnoringModifiers == "," {
+                self?.openSettings()
+                return nil
+            }
+            if e.keyCode == UInt16(kVK_Escape) && e.window === self?.panel {
                 if let s = self?.store, !s.query.isEmpty { s.query = "" } else { self?.hide() }
                 return nil
             }
@@ -373,6 +418,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         updateLoginItem()
         store.refresh()
+        // Shown once, including for installs from before this screen existed.
+        if !Prefs.shared.onboarded || CommandLine.arguments.contains("--welcome") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showWelcome() }
+        }
+        if CommandLine.arguments.contains("--settings") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.openSettings() }
+        }
         if CommandLine.arguments.contains("--show") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.toggle() }
         }
@@ -386,18 +438,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { if !self.shown { self.toggle() } }
     }
 
-    @objc func toggleLogin() {
+    @objc func toggleLogin() { setLogin(SMAppService.mainApp.status != .enabled) }
+
+    func setLogin(_ on: Bool) {
         let s = SMAppService.mainApp
         do {
-            if s.status == .enabled { try s.unregister() } else { try s.register() }
+            if on { try s.register() } else { try s.unregister() }
         } catch {
-            NSLog("ClaudeSwipe login item: \(error)")
+            debugLog("login item: \(error)")
         }
         updateLoginItem()
     }
 
     func updateLoginItem() {
         let st = SMAppService.mainApp.status
+        Prefs.shared.loginOn = st == .enabled
         loginItem.state = st == .enabled ? .on : .off
         loginItem.title = st == .requiresApproval ? "Launch at login (approve in System Settings)" : "Launch at login"
     }
@@ -470,8 +525,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func open(_ c: Chat) {
-        // Option-click (or Option-Enter) leaves your other Claude windows where they are.
-        let keepOthers = NSEvent.modifierFlags.contains(.option)
+        // Settings › Windows › Minimise other Claude windows; Option flips it for one click.
+        let keepOthers = Prefs.shared.minimiseOthers == NSEvent.modifierFlags.contains(.option)
         if let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") {
             hide()
             // The deep link always loads the chat in the main window, so first try to
@@ -562,7 +617,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.informativeText = "Type or pick one emoji. The emoji picker opens with it; Control-Command-Space reopens it."
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
-        if overrides[c.id] != nil { alert.addButton(withTitle: "Use Haiku’s pick") }
+        if overrides[c.id] != nil { alert.addButton(withTitle: "Remove my pick") }
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 28))
         field.font = .systemFont(ofSize: 18)
         field.stringValue = c.emoji ?? ""
@@ -584,7 +639,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             overrides[c.id] = newEmoji
         case .alertThirdButtonReturn:
             overrides[c.id] = nil
-            newEmoji = auto[c.id]
+            newEmoji = nil  // the refresh below fills in the AI or folder emoji
         default:
             return
         }
@@ -596,6 +651,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let i = store.chats.firstIndex(where: { $0.id == c.id }) { store.chats[i].emoji = newEmoji }
         store.refresh()
+    }
+
+    // MARK: Settings and first run
+
+    func makeWindow<V: View>(_ view: V, title: String, size: NSSize, resizable: Bool) -> NSWindow {
+        var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
+        if resizable { style.insert(.resizable) }
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: style,
+                         backing: .buffered, defer: false)
+        w.title = title
+        w.isReleasedWhenClosed = false  // we keep it and reopen it
+        w.contentMinSize = size
+        w.contentView = NSHostingView(rootView: view)
+        w.delegate = self
+        w.center()
+        return w
+    }
+
+    func bringUp(_ w: NSWindow) {
+        hide()
+        status.start()
+        NSApp.activate(ignoringOtherApps: true)
+        w.makeKeyAndOrderFront(nil)
+    }
+
+    @objc func openSettings() {
+        if settingsWindow == nil {
+            settingsWindow = makeWindow(
+                SettingsView(status: status, store: store, actions: SettingsActions(
+                    showWelcome: { [weak self] in self?.showWelcome() },
+                    repick: { [weak self] in self?.confirmRepick() },
+                    setLogin: { [weak self] in self?.setLogin($0) })),
+                title: "ClaudeSwipe Settings", size: NSSize(width: 760, height: 580), resizable: true)
+        }
+        updateLoginItem()
+        bringUp(settingsWindow!)
+    }
+
+    func showWelcome() {
+        // A fresh view each time, so it starts at step 1.
+        welcomeWindow?.delegate = nil
+        welcomeWindow?.close()
+        welcomeWindow = makeWindow(
+            WelcomeView(status: status, finish: { [weak self] in
+                self?.welcomeWindow?.close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { self?.menuShow() }
+            }),
+            title: "Welcome to ClaudeSwipe", size: NSSize(width: 560, height: 680), resizable: false)
+        bringUp(welcomeWindow!)
+    }
+
+    func windowWillClose(_ n: Notification) {
+        // Closing the first-run screen at any step counts as done.
+        if n.object as? NSWindow === welcomeWindow { Prefs.shared.onboarded = true }
+        let others = [settingsWindow, welcomeWindow].compactMap { $0 }.filter { $0 !== n.object as? NSWindow && $0.isVisible }
+        if others.isEmpty { status.stop() }
+    }
+
+    // Count comes from the last refresh: chats without your own pick, or their distinct folders.
+    func confirmRepick() {
+        let p = Prefs.shared
+        let folder = p.emojiSource == "folder"
+        let rows = store.chats.filter { $0.own_emoji != true }
+        let n = folder ? Set(rows.map(\.folder)).count : rows.count
+        let noun = folder ? (n == 1 ? "folder" : "folders") : (n == 1 ? "chat" : "chats")
+        let alert = NSAlert()
+        alert.messageText = "Re-pick all emoji?"
+        alert.informativeText = folder
+            ? "ClaudeSwipe will ask \(p.modelName) to pick an emoji again for \(n) \(noun) with chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change."
+            : "ClaudeSwipe will ask \(p.modelName) to pick an emoji again for \(n) \(noun) from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change."
+        alert.addButton(withTitle: "Re-pick")
+        alert.addButton(withTitle: "Cancel")
+        let go: (NSApplication.ModalResponse) -> Void = { [weak self] r in
+            if r == .alertFirstButtonReturn { self?.store.refresh(repick: true) }
+        }
+        if let w = settingsWindow, w.isVisible { alert.beginSheetModal(for: w, completionHandler: go) } else { go(alert.runModal()) }
     }
 
     func registerHotKey() {
