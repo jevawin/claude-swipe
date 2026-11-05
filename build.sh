@@ -8,7 +8,7 @@ APP=build/ClaudeSwipe.app
 DEST="$HOME/Applications/ClaudeSwipe.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -O -swift-version 5 -parse-as-library Sources/App.swift \
+swiftc -O -swift-version 5 -parse-as-library Sources/*.swift \
   -o "$APP/Contents/MacOS/ClaudeSwipe" -framework AppKit -framework SwiftUI -framework Carbon
 cp recent_chats.py "$APP/Contents/Resources/"
 cp Info.plist "$APP/Contents/"
