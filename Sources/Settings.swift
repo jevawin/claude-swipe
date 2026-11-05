@@ -397,34 +397,13 @@ struct SettingsView: View {
     }
 
     var windows: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Group_ {
-                Row(title: "Minimise other Claude windows", helper: minimiseHelper) {
-                    Toggle("Minimise other Claude windows", isOn: $prefs.minimiseOthers)
-                        .toggleStyle(.switch).labelsHidden()
-                }
-            }
-            Group_ {
-                if status.axAllowed {
-                    Row(title: "Accessibility allowed",
-                        helper: "Clicking a chat that is open in its own window brings that window to the front.") {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(statusStyle["done"]!.color)
-                            .accessibilityHidden(true)
-                    }
-                } else {
-                    Row(title: "Accessibility not allowed",
-                        helper: "Chats open in the main Claude window instead.") {
-                        Button("Open System Settings") { openAccessibilitySettings() }
-                    }
-                }
-            }
-        }
+        JumpBlock(status: status, minimiseTitle: "Minimise other Claude windows")
     }
 
     var ai: some View {
         let ready = status.claude == .ready
         return VStack(alignment: .leading, spacing: 14) {
-            WarningBox(text: aiWarningSettings)
+            Group_ { AIIntro(status: status, warning: aiWarningSettings) }
             Group_ {
                 Row(title: "Model", helper: "Haiku is faster and uses less of your plan") {
                     Picker("Model", selection: $prefs.aiModel) {
@@ -454,7 +433,6 @@ struct SettingsView: View {
                 }
             }
             .disabled(!ready || !prefs.pickEmoji)
-            ClaudeStatusLine(state: status.claude)
         }
     }
 }
@@ -544,47 +522,9 @@ struct WelcomeView: View {
         VStack(alignment: .leading, spacing: 16) {
             title("Two optional extras")
             body("One needs a Mac permission. The other uses your Claude plan. You can skip either one and change your mind later in Settings.")
+            JumpBlock(status: status, minimiseTitle: "Also minimise other Claude windows")
             Group_ {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Jump to the right window").font(.system(size: 15, weight: .semibold))
-                    Text("If a chat is already open in its own window, clicking it brings that window to the front. Without this, the chat opens in the main Claude window instead.")
-                        .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-                    HStack(alignment: .top, spacing: 14) {
-                        Demo(chatInFront: false, label: "Picture: the chat window sits behind other Claude windows",
-                             caption: "Before: chat hidden behind other windows")
-                        Demo(chatInFront: true, label: "Picture: the chat window is in front of the others",
-                             caption: "After: chat in front")
-                    }
-                    HStack(spacing: 12) {
-                        Text("Needs Accessibility permission, so ClaudeSwipe can bring windows to the front")
-                            .font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if status.axAllowed {
-                            Label("Allowed", systemImage: "checkmark.circle.fill")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(statusStyle["done"]!.color)
-                        } else {
-                            Button("Allow in System Settings") { openAccessibilitySettings() }
-                        }
-                    }
-                }
-                .padding(14)
-                Hairline()
-                Row(title: "Also minimise other Claude windows", helper: minimiseHelper) {
-                    Toggle("Also minimise other Claude windows", isOn: $prefs.minimiseOthers)
-                        .toggleStyle(.switch).labelsHidden()
-                }
-            }
-            Group_ {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Sort unclear chats and pick emoji").font(.system(size: 15, weight: .semibold))
-                    Text("Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.")
-                        .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-                    WarningBox(text: aiWarningWelcome)
-                    ClaudeStatusLine(state: status.claude)
-                }
-                .padding(14)
+                AIIntro(status: status, warning: aiWarningWelcome)
                 Hairline()
                 Row(title: "Use my Claude plan", helper: "Off until you turn it on. Pick the model and more in Settings › AI.") {
                     Toggle("Use my Claude plan", isOn: Binding(
@@ -602,6 +542,124 @@ struct WelcomeView: View {
             title("You're ready")
             body("Everything else lives in Settings. Open it from the menu bar icon.")
         }
+    }
+}
+
+// The two extras, shared by the first-run screen and Settings, so they look the same in both.
+
+// Where macOS keeps the permission. Named "Device Control and Data Access" on
+// macOS 27 (as seen by Jamie, not measured here); "Accessibility" before that.
+let permissionPath = "System Settings › Privacy & Security › Device Control and Data Access (called Accessibility on older macOS)"
+
+struct JumpBlock: View {
+    @ObservedObject var prefs = Prefs.shared
+    @ObservedObject var status: SystemStatus
+    let minimiseTitle: String
+
+    var body: some View {
+        Group_ {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Jump to the right window").font(.system(size: 15, weight: .semibold))
+                Text("If a chat is already open in its own window, clicking it brings that window to the front. Without this, the chat opens in the main Claude window instead.")
+                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 14) {
+                    Demo(chatInFront: false, label: "Picture: the chat window sits behind other Claude windows",
+                         caption: "Before: chat hidden behind other windows")
+                    Demo(chatInFront: true, label: "Picture: the chat window is in front of the others",
+                         caption: "After: chat in front")
+                }
+                HStack(spacing: 12) {
+                    Text(status.axAllowed
+                         ? "Permission allowed. ClaudeSwipe can bring windows to the front."
+                         : "Needs a Mac permission, so ClaudeSwipe can bring windows to the front. Turn on ClaudeSwipe in \(permissionPath).")
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if status.axAllowed {
+                        Label("Allowed", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(statusStyle["done"]!.color)
+                    } else {
+                        Button("Open System Settings") { openAccessibilitySettings() }
+                    }
+                }
+            }
+            .padding(14)
+            Hairline()
+            Row(title: minimiseTitle, helper: minimiseHelper) {
+                Toggle(minimiseTitle, isOn: $prefs.minimiseOthers).toggleStyle(.switch).labelsHidden()
+            }
+        }
+    }
+}
+
+struct AIIntro: View {
+    @ObservedObject var status: SystemStatus
+    let warning: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Sort unclear chats and pick emoji").font(.system(size: 15, weight: .semibold))
+            Text("Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.")
+                .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 14) {
+                SortDemo(sorted: false, label: "Picture: a chat card marked unsure, with no emoji",
+                         caption: "Before: chat marked unsure, no emoji")
+                SortDemo(sorted: true, label: "Picture: the same card marked done, with an emoji",
+                         caption: "After: chat sorted, with an emoji")
+            }
+            WarningBox(text: warning)
+            ClaudeStatusLine(state: status.claude)
+        }
+        .padding(14)
+    }
+}
+
+// Before/after picture of one card: unsure and plain, then sorted with an emoji badge.
+struct SortDemo: View {
+    let sorted: Bool
+    let label: String
+    let caption: String
+
+    var body: some View {
+        let st = statusStyle[sorted ? "done" : "unsure"]!
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(Theme.bg)
+                HStack(alignment: .top, spacing: 8) {
+                    RoundedRectangle(cornerRadius: 7).fill(st.color)
+                        .overlay(Image(systemName: st.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white))
+                        .overlay(alignment: .bottomTrailing) {
+                            if sorted {
+                                Circle().fill(Theme.cardHover).frame(width: 16, height: 16)
+                                    .overlay(Text("🧾").font(.system(size: 9)))
+                                    .overlay(Circle().stroke(Theme.card, lineWidth: 1.5))
+                                    .offset(x: 5, y: 5)
+                            }
+                        }
+                        .frame(width: 26, height: 26)
+                    VStack(alignment: .leading, spacing: 5) {
+                        RoundedRectangle(cornerRadius: 2).fill(Theme.text.opacity(0.7)).frame(width: 70, height: 5)
+                        RoundedRectangle(cornerRadius: 2).fill(Theme.border).frame(width: 46, height: 4)
+                        RoundedRectangle(cornerRadius: 2).fill(Theme.border).frame(width: 90, height: 4)
+                    }
+                    .padding(.top, 3)
+                }
+                .padding(10)
+                .frame(width: 170, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.card))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
+            }
+            .frame(height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isImage)
+            Text(caption).font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

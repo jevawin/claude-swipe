@@ -16,10 +16,12 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Block 1 title: Jump to the right window
 - Block 1 body: If a chat is already open in its own window, clicking it brings that window to the front. Without this, the chat opens in the main Claude window instead.
 - Picture captions: Before: chat hidden behind other windows / After: chat in front
-- Needs line: Needs Accessibility permission, so ClaudeSwipe can bring windows to the front / Button: Allow in System Settings
+- Needs line: Needs a Mac permission, so ClaudeSwipe can bring windows to the front. Turn on ClaudeSwipe in System Settings › Privacy & Security › Device Control and Data Access (called Accessibility on older macOS). / Button: Open System Settings
+- Needs line (allowed): Permission allowed. ClaudeSwipe can bring windows to the front. / Label: Allowed
 - Sub-switch: Also minimise other Claude windows / When you open a chat, every other Claude window goes to the Dock. Hold Option while you click a chat to flip this setting for that one click.
 - Block 2 title: Sort unclear chats and pick emoji
 - Block 2 body: Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.
+- Picture captions: Before: chat marked unsure, no emoji / After: chat sorted, with an emoji
 - Warning: This uses your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan.
 - Status lines: claude command found and signed in / claude command found but not signed in / claude command not found
 - Switch: Use my Claude plan / Off until you turn it on. Pick the model and more in Settings › AI.
@@ -43,11 +45,10 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Hide folder label for: None (plus folder names). Helper: Most chats sit in one folder. Hide that folder's label to keep cards tidy.
 
 ## Settings › Windows
-- Minimise other Claude windows / When you open a chat, every other Claude window goes to the Dock. Hold Option while you click a chat to flip this setting for that one click.
-- Accessibility status (allowed): Accessibility allowed. Clicking a chat that is open in its own window brings that window to the front.
-- Accessibility status (not allowed): Accessibility not allowed. Chats open in the main Claude window instead. / Button: Open System Settings
+- The same "Jump to the right window" block as Welcome step 2 (title, body, pictures, needs line), with the switch named "Minimise other Claude windows".
 
 ## Settings › AI
+- Starts with the same "Sort unclear chats and pick emoji" block as Welcome step 2 (title, body, pictures, status line), with this warning:
 - Warning: These features use your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan.
 - Model: Haiku / Sonnet. Helper: Haiku is faster and uses less of your plan
 - Sort unclear chats / Off: those chats show as "unsure"

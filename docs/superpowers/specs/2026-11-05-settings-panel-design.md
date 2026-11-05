@@ -83,7 +83,8 @@ Each row gains `own_emoji` (true when your own pick decides it), so the app can 
 - An `NSWindow` hosting a SwiftUI view: sidebar (General, Cards, Windows, AI) and a pane. About 760×580, not resizable below that.
 - Opens from a new button in the panel header (Lucide `settings-2`, drawn as a SwiftUI `Path`: two lines and two circles, 15pt, next to refresh) and "Settings…" (⌘,) in the menu bar menu. Opening it hides the panel and activates the app, since it runs as an accessory app.
 - Cards pane starts with a live preview card that follows the settings.
-- Windows pane shows Accessibility status ("Allowed" / "Not allowed" with an "Open System Settings" button), re-checked every second while the window is open.
+- The Windows and AI panes start with the same blocks as first-run step 2 (pictures included), so people who skipped the welcome see something familiar. The permission state is re-checked every second while the window is open.
+- macOS 27 lists the permission under Privacy & Security › Device Control and Data Access (reported by Jamie, not measured); older macOS calls it Accessibility. The copy names both.
 
 ## First-run screen
 
