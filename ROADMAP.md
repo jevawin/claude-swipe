@@ -14,7 +14,7 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
    - Theme: auto, light, dark.
    - Window handling: minimise other Claude windows when opening a chat (needs Accessibility). Off by default.
    - Hide the folder chip for a home folder (replaces the `defaults write homeFolder` command).
-   - "Ready to clear" section (an extra Haiku check on done chats). Its black badge needs a colour that shows in dark mode.
+   - "Ready to clear" badge: black doesn't show in dark mode, so it needs a new colour. The grouping behind it is item 7.
    - First-run screen: for each feature that needs a permission, show a short demo, what it needs, and an on/off choice.
    - Update the README for PR #1's features.
 3. **Project structure for two people and their Claudes.** Clone `clumeral-game` and `pub-quiz` temporarily and review all their docs, not just `.clancy` (no longer used). A short `CLAUDE.md` that points to the right doc for each kind of work, a QA checklist, "always branch and PR", and when to use superpowers skills.
@@ -28,12 +28,32 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
 6. **Terminal and VS Code chats.** Transcripts record `entrypoint`: `claude-desktop`, `claude-vscode` or `cli`. Better titles (first prompt, not the session ID), folder labels, a fitting open action for each, and decide whether a stopped terminal chat should show as blocked.
    - Show the source app's real icon next to the time ("10m ago in VS Code"), about 13pt.
    - Only show icons when the panel holds chats from more than one source. Someone who only uses VS Code sees no icons.
+7. **Chat categorisation and sorting.** "Ready to clear" fires on chats that are still being worked: of the 10 verdicts that can be checked, 4 are premature (measured below). Make grouping a user choice, and tune the AI pass before trusting it.
+   - How it works now, read from the code. Status has three sources, in order: the rules in `classify()`; the desktop app's own `postTurnSummary` when it covers the latest reply (`app_summary`, `recent_chats.py:125` — `completed` becomes `done` with no Haiku call); then Haiku for whatever is left (`ask_haiku`, waiting vs done).
+   - "Ready to clear" is a *second* Haiku pass, over `done` chats only (`chat_extras`, `recent_chats.py:205`). It already gets the title, the first 300 characters and the last 600 — so "give it the first and last message" is what it does today, not the fix.
+   - Sections are hard-coded in `section()` (`recent_chats.py:145`): active (touched under an hour ago), clear, done, today (under a day), older. Sort is section order, then time touched (`:346`).
+   - `--no-ai` already skips new Haiku calls, and `App.swift:54` already runs the script that way first, then again with AI. But cached verdicts still apply either way (status at `:326`, finished at `:215`), so an "AI off" setting also has to ignore the cache — a small change, not new logic. Grouping "none" is a separate thing: a change to `section()`.
+   - **Measured 2026-11-07**, from the verdict cache (`~/Library/Caches/claude-swipe/verdicts.json`: 79 finished verdicts over 27 sessions), checked against the transcripts:
+     - 28 verdicts came back `true`; 19 of 27 sessions got at least one.
+     - 10 of those 28 have a later write visible. **5 were written to again within 30 minutes** (2.3, 10.3, 12.1, 15.9, 19.6 min), and **4 of the 5 are confirmed premature**: the next thing in the transcript is a prompt the user typed, classified with the script's own `is_real_prompt()`. One is a go-ahead to commit, two ask follow-up questions about the work in hand, one asks for a change. The 2.3-minute case is one of them.
+     - The 5th (15.9 min) has no records after the verdict timestamp, so it stays unverified. A method artefact, not a clean case.
+     - Gaps are upper bounds: judgements only run when the script runs, so the real next write can be sooner.
+     - Two sessions show the judge reversing itself (`true`, then `false` later). `5b072b83` went `fffffffffffTTfffffffffTf` over 28 hours.
+     - The other 18 `true` verdicts have no later judgement, so they can't be checked and may well be right. The claim is "4 of the 10 checkable verdicts are premature", not "the judge is wrong 70% of the time".
+     - Checked and ruled out: two of these are background sessions, so a write after a verdict could have been an injected `<side-sessions-event>` rather than real work. It wasn't — all three short gaps on `5b072b83` carry typed prompts.
+   - Mechanism: two routes reach `done` (the app's `postTurnSummary`, or the first Haiku pass) and both end at the same finished judge, which says `true` on 600 characters of tail even though its own prompt says "when unsure, false". Only 2 sessions have a confirmed premature verdict — one got `done` from Haiku, one from the rules or the app — so the sample is far too small to say which route is the bigger problem. Worth noting the first pass is *told* "A plain report of finished work counts as done" (`recent_chats.py:162`), and in a long iterative chat every intermediate report matches that; `5b072b83`'s cached reasons show that flip, from asking the user to test and report back (waiting) to confirming the work with no open question (done). Evidence for one session, not a general finding.
+   - Chat length does **not** explain it, against my first guess. Median lines for ever-finished chats is 566 against 701 for never-finished — the wrong way round. All 6 chats over 1,500 lines did get a finished verdict, but no never-finished chat is longer than 1,127, so length can't be separated from group membership in this sample. Don't build on it.
+   - Diagnostic for next time: `chat_extras` never writes `why`, so every chat in "Ready to clear" passed the finished judge regardless. `why` only says where its `done` came from — an `(ai)` prefix means the first Haiku pass, no prefix means the rules or the app. The cache is the better source: repeated `fin:` keys for one session id, plus the gap to the next write, find premature verdicts without waiting for one to happen.
+   - Grouping, as a setting in item 2's panel: none (one flat list); recency (active, today, this week, older); folder, using item 4's labels; source app — desktop, VS Code, terminal, from item 6's `entrypoint`; alphabetical; Claude's status; smart (AI), the current behaviour, once tuned.
+   - Sorting, separately: time touched (default) or title. Grouping picks the sections, sorting orders chats inside each one, so the two can't conflict. "None" is a single section.
+   - AI setting: off, Haiku, or Sonnet.
+   - Tuning levers to weigh, not decided: put turn count and chat age in the prompt (note the length finding below — don't assume length is the signal); send the last two or three exchanges instead of 600 characters; require explicit wrap-up language; a right-click "not finished" override stored like the emoji overrides (`App.swift:551`), which also builds a labelled set to tune against; Sonnet for this pass only.
 
 ## Later
 
-7. **Icon library** (Lucide) as an alternative to emojis.
-8. **Trackpad edge swipe.** Parked while you test the cursor-edge trigger.
-9. **Signing with an Apple Developer certificate**, once the account exists. The self-signed "ClaudeSwipe Local" option from PR #1 stays until then.
+8. **Icon library** (Lucide) as an alternative to emojis.
+9. **Trackpad edge swipe.** Parked while you test the cursor-edge trigger.
+10. **Signing with an Apple Developer certificate**, once the account exists. The self-signed "ClaudeSwipe Local" option from PR #1 stays until then.
 
 ## Parked
 
