@@ -21,6 +21,10 @@ final class Prefs: ObservableObject {
     @Published var emojiSource: String { didSet { d.set(emojiSource, forKey: "emojiSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
     @Published var minimiseOthers: Bool { didSet { d.set(minimiseOthers, forKey: "minimiseOthers") } }
+    // Percent to fade Done cards by. Capped at 80 so they stay readable.
+    @Published var doneFade: Double { didSet { d.set(doneFade, forKey: "doneFade") } }
+    // Whether the Done section is open; remembers the last click.
+    @Published var showDone: Bool { didSet { d.set(showDone, forKey: "showDone") } }
     // Model changes only affect new picks, so no refresh.
     @Published var aiModel: String { didSet { d.set(aiModel, forKey: "aiModel") } }
     @Published var aiSort: Bool { didSet { d.set(aiSort, forKey: "aiSort"); scriptChanged() } }
@@ -36,7 +40,7 @@ final class Prefs: ObservableObject {
     init() {
         d.register(defaults: [
             "theme": "auto", "cardIcon": "status", "showEmoji": true, "emojiSource": "subject",
-            "homeFolder": "", "minimiseOthers": false, "aiModel": "haiku",
+            "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiEmoji": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
@@ -45,6 +49,8 @@ final class Prefs: ObservableObject {
         emojiSource = d.string(forKey: "emojiSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
+        doneFade = min(80, max(0, d.double(forKey: "doneFade")))
+        showDone = d.bool(forKey: "showDone")
         aiModel = d.string(forKey: "aiModel") ?? "haiku"
         aiSort = d.bool(forKey: "aiSort")
         aiEmoji = d.bool(forKey: "aiEmoji")
@@ -422,6 +428,16 @@ struct SettingsView: View {
                         ForEach(folders, id: \.self) { Text($0).tag($0) }
                     }
                     .labelsHidden().frame(maxWidth: 220)
+                }
+                Hairline()
+                Row(title: "Fade done chats",
+                    helper: "Done chats show fainter so open work stands out. 80% at most, so they stay readable.") {
+                    HStack(spacing: 8) {
+                        Slider(value: $prefs.doneFade, in: 0...80, step: 5).frame(width: 130)
+                        Text("\(Int(prefs.doneFade))%").monospacedDigit()
+                            .foregroundStyle(Theme.secondary).frame(width: 34, alignment: .trailing)
+                        Button("No fade") { prefs.doneFade = 0 }.disabled(prefs.doneFade == 0)
+                    }
                 }
             }
         }
