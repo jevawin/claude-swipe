@@ -165,7 +165,7 @@ struct PanelView: View {
     let open: (Chat) -> Void
     let editEmoji: (Chat) -> Void
     let openSettings: () -> Void
-    @LocalState private var showDone = false
+    @ObservedObject private var prefs = Prefs.shared
     @FocusState private var searchFocused: Bool
 
     // Every word must appear somewhere in title, folder or preview.
@@ -226,7 +226,7 @@ struct PanelView: View {
                             HStack(spacing: 4) {
                                 Text("\(sec.label) · \(items.count)")
                                 if collapsible {
-                                    Image(systemName: showDone ? "chevron.down" : "chevron.right")
+                                    Image(systemName: prefs.showDone ? "chevron.down" : "chevron.right")
                                         .font(.system(size: 10, weight: .semibold))
                                 }
                             }
@@ -234,10 +234,11 @@ struct PanelView: View {
                             .foregroundStyle(Theme.secondary)
                             .padding(.horizontal, 2).padding(.top, 8)
                             .contentShape(Rectangle())
-                            .onTapGesture { if collapsible { showDone.toggle() } }
-                            if !collapsible || showDone || !store.query.isEmpty {
+                            .onTapGesture { if collapsible { prefs.showDone.toggle() } }
+                            if !collapsible || prefs.showDone || !store.query.isEmpty {
                                 ForEach(items) { c in
                                     Card(chat: c)
+                                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
                                         .onTapGesture { open(c) }
                                         .contextMenu {
                                             Button("Change emoji…") { editEmoji(c) }
