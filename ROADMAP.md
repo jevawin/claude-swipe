@@ -25,7 +25,7 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
    - Only show `~` when the folder really sits under the home folder. Paths outside it (`/private/tmp`, `/Users/Shared/…`) stay absolute.
    - Long paths: decide how to shorten something like `~/Documents/Work/Clients/Client-A/Projects/A-Project/`. Options to weigh: keep the last two parts, collapse the middle (`~/Documents/…/A-Project`), or suggest a new root when many chats share a long prefix.
 5. **Emoji from the opening of a chat.** Use the first three messages, not the last. PR #1 already uses the first prompt; extend it.
-6. **Terminal and VS Code chats.** Transcripts record `entrypoint`: `claude-desktop`, `claude-vscode` or `cli`. Better titles (first prompt, not the session ID), folder labels, a fitting open action for each, and decide whether a stopped terminal chat should show as blocked.
+6. **Terminal and VS Code chats.** Parked: the list now shows desktop chats only, since the tool is for switching between them. If this comes back: Transcripts record `entrypoint`: `claude-desktop`, `claude-vscode` or `cli`. Better titles (first prompt, not the session ID), folder labels, a fitting open action for each, and decide whether a stopped terminal chat should show as blocked.
    - Show the source app's real icon next to the time ("10m ago in VS Code"), about 13pt.
    - Only show icons when the panel holds chats from more than one source. Someone who only uses VS Code sees no icons.
 7. **Chat categorisation and sorting.** "Ready to clear" fires on chats that are still being worked: of the 10 verdicts that can be checked, 4 are premature (measured below). Make grouping a user choice, and tune the AI pass before trusting it.
