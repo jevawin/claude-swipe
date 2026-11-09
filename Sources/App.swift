@@ -316,9 +316,6 @@ struct Card: View {
                             .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
                             .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
                     }
-                    if chat.app == "cli" {
-                        Text("terminal").font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                    }
                 }
                 .padding(.top, 4)
                 if !chat.why.isEmpty {
@@ -527,29 +524,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func open(_ c: Chat) {
         // Settings › Windows › Minimise other Claude windows; Option flips it for one click.
         let keepOthers = Prefs.shared.minimiseOthers == NSEvent.modifierFlags.contains(.option)
-        if let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") {
-            hide()
-            // The deep link always loads the chat in the main window, so first try to
-            // raise a window already showing it (a pop-out, or the main window itself).
-            if let w = raiseClaudeWindow(titled: c.title) {
-                if !keepOthers { minimiseClaudeWindows(except: w) }
-            } else {
-                NSWorkspace.shared.open(url)
-                if !keepOthers {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-                        guard let self, let ax = self.claudeAX(),
-                              let main = self.attribute(ax.element, kAXMainWindowAttribute) else { return }
-                        self.minimiseClaudeWindows(except: main as! AXUIElement)
-                    }
+        guard let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") else { return }
+        hide()
+        // The deep link always loads the chat in the main window, so first try to
+        // raise a window already showing it (a pop-out, or the main window itself).
+        if let w = raiseClaudeWindow(titled: c.title) {
+            if !keepOthers { minimiseClaudeWindows(except: w) }
+        } else {
+            NSWorkspace.shared.open(url)
+            if !keepOthers {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                    guard let self, let ax = self.claudeAX(),
+                          let main = self.attribute(ax.element, kAXMainWindowAttribute) else { return }
+                    self.minimiseClaudeWindows(except: main as! AXUIElement)
                 }
             }
-            return
         }
-        // Terminal-only chat: copy a resume command instead.
-        let cmd = "cd '\(c.cwd ?? NSHomeDirectory())' && claude -r \(c.id)"
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(cmd, forType: .string)
-        store.notice = "Copied resume command for “\(c.title)”. Paste it in a terminal."
     }
 
     // The Claude desktop app as an Accessibility element. Needs Accessibility

@@ -364,7 +364,9 @@ def main():
         if age > args.days * 86400:
             continue
         sid = Path(f).stem
-        dm = meta.get(sid, {})
+        dm = meta.get(sid)
+        if not dm:
+            continue  # no desktop chat to switch to (terminal, VS Code, headless runs)
         if dm.get("isArchived") or dm.get("scheduledTaskId"):
             continue  # scheduled tasks run themselves; not chats to swipe
         recs, m = read_turns(f)
@@ -380,7 +382,7 @@ def main():
         title = dm.get("title") or m["title"] or (ctx or {}).get("prompt", "")[:60] or sid[:8]
         row = {"id": sid, "status": status, "why": why, "title": title,
                "folder": folder_label(dm.get("cwd") or m["cwd"], m["branch"]),
-               "age": age, "engaged": now - touched, "app": "desktop" if dm else "cli",
+               "age": age, "engaged": now - touched, "app": "desktop",
                "desktop_id": dm.get("sessionId"),
                "cwd": dm.get("cwd") or m["cwd"]}
         key = f"{sid}:{mtime}"
