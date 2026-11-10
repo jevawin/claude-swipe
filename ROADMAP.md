@@ -49,6 +49,18 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
    - The measurements above were taken against the code as it stood at `e35f252`, before PR #3 landed. Re-checked at `56fefdf`: the finished judge is behaviourally identical — same 300/600 inputs, same prompt wording, same `section()` thresholds — so the findings carry over. Only the line numbers moved.
    - Tuning levers to weigh, not decided: put turn count and chat age in the prompt (note the length finding below — don't assume length is the signal); send the last two or three exchanges instead of 600 characters; require explicit wrap-up language; a right-click "not finished" override stored like the emoji overrides (`App.swift:551`), which also builds a labelled set to tune against; Sonnet for this pass only.
 
+## Kristina's ideas
+
+In the order Kristina plans to build them, one branch and PR each. Items 11 to 13 first, then she'll reassess.
+
+11. **Pin chats.** Some chats get reused every day and shouldn't drop into Done. Right-click a card to pin or unpin it. Pinned chats sit in their own section at the top and never move to Done or Ready to clear. Store pins by session ID, like the emoji overrides.
+12. **Card size setting.** Compact, normal and large in Settings › Cards, changing font size, padding and tile size, so more chats fit (or fewer, bigger ones). Fixed sizes first; sizing to fit the screen could come later.
+13. **Show linked chats.** A chat started from another one (a side session) should look related to its parent, even when the titles and emoji differ. For example, a shared outline colour on the emoji tile, or the child shown under its parent. The desktop metadata has fields such as `spawnSeed` and `lastSpawnRootDetected` that may hold the link (unchecked).
+14. **Numbered sections on the welcome screen.** "Two optional extras" reads as one block, because both cards share the same shading. Number them 1 and 2, and give each card an orange outline in Claude's colours so they're clearly separate.
+15. **Custom shortcut.** Let people choose their own hotkey in Settings › General instead of the fixed ⌃⌥C. The welcome screen's "Press Control-Option-C" line shows whatever is set, so rerunning the welcome screen after a change reminds you of your own shortcut.
+16. **Turn off or rename sections, and drag chats between them.** Overlaps item 7, which already plans grouping as a setting (including "none"). Dragging a chat to another section would be a manual override, like item 7's right-click "not finished" idea. Agree the approach with item 7 before building.
+17. **A new name (suggestion).** Something about switching, such as Claude Switcher, since the app is for switching between chats and windows. Jamie's call. Changing the bundle ID would reset everyone's window permission, so the display name might change without it.
+
 ## Later
 
 8. **Icon library** (Lucide) as an alternative to emojis.
