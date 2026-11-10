@@ -4,7 +4,7 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
 
 ## Done
 
-1. **Merged Kristina's PR #1** (status badges, subject emoji, window minimising, stable signing). Merge commit `8608e7c`. Her behaviour changes become settings in item 2.
+1. **Merged kevawin's PR #1** (status badges, subject emoji, window minimising, stable signing). Merge commit `8608e7c`. Her behaviour changes become settings in item 2.
 
 ## Next
 
