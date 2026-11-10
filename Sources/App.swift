@@ -523,8 +523,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func open(_ c: Chat) {
-        // Settings › Windows › Minimise other Claude windows; Option flips it for one click.
-        let keepOthers = Prefs.shared.minimiseOthers == NSEvent.modifierFlags.contains(.option)
+        // Settings › Windows › Minimise other Claude windows; Command or Option flips it for one click.
+        let keepOthers = Prefs.shared.minimiseOthers == !NSEvent.modifierFlags.intersection([.command, .option]).isEmpty
         guard let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") else { return }
         hide()
         // The deep link always loads the chat in the main window, so first try to

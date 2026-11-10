@@ -286,7 +286,7 @@ func openAccessibilitySettings() {
 
 let aiWarningSettings = "These features use your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan."
 let aiWarningWelcome = "This uses your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan."
-let minimiseHelper = "When you open a chat, every other Claude window goes to the Dock. Hold Option while you click a chat to flip this setting for that one click."
+let minimiseHelper = "When you open a chat, every other Claude window goes to the Dock. Hold Command or Option while you click a chat to flip this setting for that one click."
 
 // MARK: - Settings window
 
