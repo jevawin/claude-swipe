@@ -23,6 +23,7 @@ struct Chat: Codable, Identifiable, Hashable {
     var own_emoji: Bool?  // your own pick decides the emoji (counted for Re-pick)
     var parent: String?   // desktop id of the chat this one was started from
     var family: String?   // top of its side-session chain; set only when 2+ listed chats share it
+    var familyColour: Int?  // index into Card.familyPalette, set by Store.assignFamilyColours
 }
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
@@ -71,9 +72,27 @@ final class Store: ObservableObject {
 
     private func apply(_ r: Result<[Chat], Error>) {
         switch r {
-        case .success(let c): chats = c; error = nil
+        case .success(var c): Store.assignFamilyColours(&c); chats = c; error = nil
         case .failure(let e): error = "\(e)"
         }
+    }
+
+    // Linked-chat families take colours in palette order, so the first few on screen never look
+    // alike. A family keeps its colour while it's listed (remembered across launches); a new
+    // family takes the first colour no listed family has. Past the palette's end, colours repeat.
+    static func assignFamilyColours(_ chats: inout [Chat]) {
+        let key = "familyColours", n = Card.familyPalette.count
+        var families: [String] = []
+        for c in chats { if let f = c.family, !families.contains(f) { families.append(f) } }
+        let saved = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        var colour: [String: Int] = [:], used = Set<Int>()
+        for f in families { if let i = saved[f], i < n, !used.contains(i) { colour[f] = i; used.insert(i) } }
+        for f in families where colour[f] == nil {
+            let i = (0..<n).first { !used.contains($0) } ?? colour.count % n
+            colour[f] = i; used.insert(i)
+        }
+        UserDefaults.standard.set(colour, forKey: key)
+        for i in chats.indices { chats[i].familyColour = chats[i].family.flatMap { colour[$0] } }
     }
 
     static func run(_ script: String, _ args: [String]) -> Result<[Chat], Error> {
@@ -300,13 +319,19 @@ struct Card: View {
     }
 
     // Linked chats (a chat and the side sessions started from it) share a border
-    // colour on the tile, under the badge. Picked from the family id with a fixed hash, so it stays
-    // the same between refreshes and launches. Hues steer clear of the status colours.
-    static let familyHues: [CGFloat] = [330, 175, 295, 75, 195, 18, 245, 150]
+    // colour on the tile, under the badge. Store.assignFamilyColours picks which one. Ordered so
+    // neighbours contrast, and kept away from the status colours (blue, amber, red, green, purple).
+    static let familyPalette: [NSColor] = [
+        0xE5398D,  // pink
+        0x12A39B,  // teal
+        0xF2C315,  // yellow
+        0x2E3F9E,  // navy
+        0x8CC63F,  // lime
+        0x8A5530,  // brown
+        0x4FC3F7,  // sky
+    ].map { NSColor(srgbRed: CGFloat($0 >> 16 & 0xFF) / 255, green: CGFloat($0 >> 8 & 0xFF) / 255, blue: CGFloat($0 & 0xFF) / 255, alpha: 1) }
     var familyColor: Color? {
-        guard let f = chat.family else { return nil }
-        let h = f.unicodeScalars.reduce(UInt32(2166136261)) { ($0 ^ $1.value) &* 16777619 }
-        return Color(nsColor: hsl(Card.familyHues[Int(h % UInt32(Card.familyHues.count))], 70, 55))
+        chat.familyColour.map { Color(nsColor: Card.familyPalette[$0 % Card.familyPalette.count]) }
     }
 
     var body: some View {
