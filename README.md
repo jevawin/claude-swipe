@@ -42,7 +42,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 ## Settings
 
 - **General**: theme (auto, light or dark), launch at login, and a button to show the welcome screen again.
-- **Cards**: whether the status or the emoji is the big icon, whether to show emoji at all, whether emoji come from the chat's subject or its folder, and a folder whose label to hide (most people keep most chats in one folder).
+- **Cards**: card size (Default, Cozy with everything a little smaller, or Compact, which also cuts the summary to one line, so more chats fit), whether the status or the emoji is the big icon, whether to show emoji at all, whether emoji come from the chat's subject or its folder, and a folder whose label to hide (most people keep most chats in one folder).
 - **Windows**: minimise other Claude windows when you open a chat. Hold Option while you click a chat to flip this setting for that one click.
 - **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick emoji, and the Ready to clear section. A Re-pick button asks again for every chat's emoji.
 
