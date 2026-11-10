@@ -5,7 +5,7 @@ blocked / done / finished, each with a subject emoji.
 Sources (both undocumented, read-only):
 - ~/.claude/projects/<dashed-cwd>/<cli-session-id>.jsonl   transcripts
 - ~/Library/Application Support/Claude/claude-code-sessions/*/*/local_*.json
-  desktop app metadata: title, cwd, isArchived, cliSessionId
+  desktop app metadata: title, cwd, isArchived, cliSessionId, spawnedFrom
 
 Rules decide most chats. With --sort, ones the rules can't call go to the
 model in one batch via `claude -p --model <model> --no-session-persistence`.
@@ -40,6 +40,24 @@ def desktop_meta():
             continue
         if d.get("cliSessionId"):
             out[d["cliSessionId"]] = d
+    return out
+
+
+def families(meta):
+    """desktop sessionId -> the sessionId at the top of its chain of side sessions.
+
+    A chat started from another one records it in spawnedFrom.sessionId
+    (measured 2026-11-10; spawnSeed and lastSpawnRootDetected stayed empty).
+    Chats with no parent are their own root."""
+    parent = {d.get("sessionId"): (d.get("spawnedFrom") or {}).get("sessionId")
+              for d in meta.values() if d.get("sessionId")}
+    out = {}
+    for sid in parent:
+        root, seen = sid, {sid}
+        while parent.get(root) and parent[root] not in seen:
+            root = parent[root]
+            seen.add(root)
+        out[sid] = root
     return out
 
 
@@ -384,6 +402,7 @@ def main():
                "folder": folder_label(dm.get("cwd") or m["cwd"], m["branch"]),
                "age": age, "engaged": now - touched, "app": "desktop",
                "desktop_id": dm.get("sessionId"),
+               "parent": (dm.get("spawnedFrom") or {}).get("sessionId"),
                "cwd": dm.get("cwd") or m["cwd"]}
         key = f"{sid}:{mtime}"
         info[sid] = {"key": key, "opening": first_prompt(recs), "reply": last_reply(recs)}
@@ -418,7 +437,16 @@ def main():
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_text(json.dumps(cache))
 
+    # Linked chats share a family: the root of their side-session chain. Only
+    # set when two or more listed chats share it, so lone chats look as before.
+    fam = families(meta)
+    counts = {}
     for r in rows:
+        r["family"] = fam.get(r["desktop_id"])
+        counts[r["family"]] = counts.get(r["family"], 0) + 1
+    for r in rows:
+        if counts.get(r["family"], 0) < 2:
+            r["family"] = None
         r["section"] = section(r["status"], r["engaged"])
     order = {"active": 0, "today": 1, "older": 2, "clear": 3, "done": 4}
     rows.sort(key=lambda r: (order[r["section"]], r["engaged"]))
@@ -429,7 +457,8 @@ def main():
     for r in rows:
         a = max(0, r["engaged"])
         age = f"{int(a // 60)}m" if a < 3600 else f"{int(a // 3600)}h" if a < 86400 else f"{int(a // 86400)}d"
-        print(f"{r['section']:<6} {r['status']:<8} {age:>4}  {r['folder'][:30]:<30}  {r['title'][:38]:<38}  {r['why'][:60]}")
+        link = f"  [linked {r['family'][6:14]}]" if r["family"] else ""
+        print(f"{r['section']:<6} {r['status']:<8} {age:>4}  {r['folder'][:30]:<30}  {r['title'][:38]:<38}  {r['why'][:60]}{link}")
 
 
 if __name__ == "__main__":

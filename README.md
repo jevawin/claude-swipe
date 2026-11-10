@@ -18,6 +18,8 @@ Each card shows the chat's status, folder, a one-line summary and an emoji. The 
 - Violet box: ready to clear.
 - Grey: stuck or unsure.
 
+A chat started from another one (a side session) gets a coloured outline round its tile, the same colour as the chat that started it and any other side sessions from it. Each family of linked chats gets its own colour. Chats with no links have no outline.
+
 ## Install
 
 You need a Mac with Apple's command line tools. If `swiftc --version` fails, run `xcode-select --install` first.

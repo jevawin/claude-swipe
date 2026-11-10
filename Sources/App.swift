@@ -21,6 +21,9 @@ struct Chat: Codable, Identifiable, Hashable {
     let cwd: String?
     var emoji: String?
     var own_emoji: Bool?  // your own pick decides the emoji (counted for Re-pick)
+    var parent: String?   // desktop id of the chat this one was started from
+    var family: String?   // top of its side-session chain; set only when 2+ listed chats share it
+    var familyColour: Int?  // index into Card.familyPalette, set by Store.assignFamilyColours
 }
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
@@ -69,9 +72,27 @@ final class Store: ObservableObject {
 
     private func apply(_ r: Result<[Chat], Error>) {
         switch r {
-        case .success(let c): chats = c; error = nil
+        case .success(var c): Store.assignFamilyColours(&c); chats = c; error = nil
         case .failure(let e): error = "\(e)"
         }
+    }
+
+    // Linked-chat families take colours in palette order, so the first few on screen never look
+    // alike. A family keeps its colour while it's listed (remembered across launches); a new
+    // family takes the first colour no listed family has. Past the palette's end, colours repeat.
+    static func assignFamilyColours(_ chats: inout [Chat]) {
+        let key = "familyColours", n = Card.familyPalette.count
+        var families: [String] = []
+        for c in chats { if let f = c.family, !families.contains(f) { families.append(f) } }
+        let saved = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        var colour: [String: Int] = [:], used = Set<Int>()
+        for f in families { if let i = saved[f], i < n, !used.contains(i) { colour[f] = i; used.insert(i) } }
+        for f in families where colour[f] == nil {
+            let i = (0..<n).first { !used.contains($0) } ?? colour.count % n
+            colour[f] = i; used.insert(i)
+        }
+        UserDefaults.standard.set(colour, forKey: key)
+        for i in chats.indices { chats[i].familyColour = chats[i].family.flatMap { colour[$0] } }
     }
 
     static func run(_ script: String, _ args: [String]) -> Result<[Chat], Error> {
@@ -272,7 +293,7 @@ struct Card: View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
         if prefs.showEmoji && prefs.cardIcon == "emoji" {
             RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(familyColor ?? Theme.border, lineWidth: familyColor == nil ? 1 : 2.5))
                 .overlay(Text(emoji ?? "💬").font(.system(size: 19)))
                 .overlay(alignment: .bottomTrailing) {
                     Circle().fill(st.color)
@@ -283,6 +304,7 @@ struct Card: View {
                 }
         } else {
             RoundedRectangle(cornerRadius: 9).fill(st.color)
+                .overlay { if let c = familyColor { RoundedRectangle(cornerRadius: 9).strokeBorder(c, lineWidth: 2.5) } }
                 .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
                 .overlay(alignment: .bottomTrailing) {
                     if let e = emoji {
@@ -296,12 +318,27 @@ struct Card: View {
         }
     }
 
+    // Linked chats (a chat and the side sessions started from it) share a border
+    // colour on the tile, under the badge. Store.assignFamilyColours picks which one. Ordered so
+    // neighbours contrast, and kept away from the status colours (blue, amber, red, green, purple).
+    static let familyPalette: [NSColor] = [
+        0xEE1D52,  // raspberry
+        0x0FA37F,  // jade (greener than sky, so the two don't blur)
+        0xF9DC1C,  // lemon (clear of the amber "waiting" colour)
+        0x2E3F9E,  // navy
+        0x8CC63F,  // lime
+        0x5CC8F5,  // sky
+    ].map { NSColor(srgbRed: CGFloat($0 >> 16 & 0xFF) / 255, green: CGFloat($0 >> 8 & 0xFF) / 255, blue: CGFloat($0 & 0xFF) / 255, alpha: 1) }
+    var familyColor: Color? {
+        chat.familyColour.map { Color(nsColor: Card.familyPalette[$0 % Card.familyPalette.count]) }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             tile
                 .frame(width: 34, height: 34)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+                .accessibilityLabel((statusName[chat.status] ?? "Unsure") + (chat.family == nil ? "" : ", linked chat"))
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
