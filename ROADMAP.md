@@ -49,9 +49,9 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
    - The measurements above were taken against the code as it stood at `e35f252`, before PR #3 landed. Re-checked at `56fefdf`: the finished judge is behaviourally identical — same 300/600 inputs, same prompt wording, same `section()` thresholds — so the findings carry over. Only the line numbers moved.
    - Tuning levers to weigh, not decided: put turn count and chat age in the prompt (note the length finding below — don't assume length is the signal); send the last two or three exchanges instead of 600 characters; require explicit wrap-up language; a right-click "not finished" override stored like the emoji overrides (`App.swift:551`), which also builds a labelled set to tune against; Sonnet for this pass only.
 
-## Kristina's ideas
+## kevawin's ideas
 
-In the order Kristina plans to build them, one branch and PR each. Items 11 to 13 first, then she'll reassess.
+In the order kevawin plans to build them, one branch and PR each. Items 11 to 13 first, then she'll reassess.
 
 11. **Pin chats.** Some chats get reused every day and shouldn't drop into Done. Right-click a card to pin or unpin it. Pinned chats sit in their own section at the top and never move to Done or Ready to clear. Store pins by session ID, like the emoji overrides.
 12. **Card size setting.** Compact, normal and large in Settings › Cards, changing font size, padding and tile size, so more chats fit (or fewer, bigger ones). Fixed sizes first; sizing to fit the screen could come later.
