@@ -218,7 +218,7 @@ struct PanelView: View {
                 Text(e).font(.system(size: 13)).foregroundStyle(.red).padding(16)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: CardMetrics.of(prefs.cardSize).gap) {
                     ForEach(sections, id: \.key) { sec in
                         let items = filtered.filter { $0.section == sec.key }
                         if !items.isEmpty {
@@ -265,71 +265,72 @@ struct Card: View {
     @LocalState private var hover = false
 
     var emoji: String? { prefs.showEmoji ? chat.emoji.flatMap { $0.isEmpty ? nil : $0 } : nil }
+    var m: CardMetrics { CardMetrics.of(prefs.cardSize) }  // Settings › Cards › Card size
 
     // Settings › Cards › Card icon. "status": status tile with the emoji as a badge
     // (no emoji, no badge). "emoji": emoji tile (💬 if none) with the status as a badge.
     @ViewBuilder var tile: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
         if prefs.showEmoji && prefs.cardIcon == "emoji" {
-            RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
-                .overlay(Text(emoji ?? "💬").font(.system(size: 19)))
+            RoundedRectangle(cornerRadius: m.tileCorner).fill(Theme.cardHover)
+                .overlay(RoundedRectangle(cornerRadius: m.tileCorner).stroke(Theme.border, lineWidth: 1))
+                .overlay(Text(emoji ?? "💬").font(.system(size: m.tileEmoji)))
                 .overlay(alignment: .bottomTrailing) {
                     Circle().fill(st.color)
-                        .frame(width: 18, height: 18)
-                        .overlay(Image(systemName: st.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+                        .frame(width: m.badge, height: m.badge)
+                        .overlay(Image(systemName: st.icon).font(.system(size: m.badgeSymbol, weight: .bold)).foregroundStyle(.white))
                         .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                        .offset(x: 6, y: 6)
+                        .offset(x: m.badgeOffset, y: m.badgeOffset)
                 }
         } else {
-            RoundedRectangle(cornerRadius: 9).fill(st.color)
-                .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
+            RoundedRectangle(cornerRadius: m.tileCorner).fill(st.color)
+                .overlay(Image(systemName: st.icon).font(.system(size: m.tileSymbol, weight: .semibold)).foregroundStyle(.white))
                 .overlay(alignment: .bottomTrailing) {
                     if let e = emoji {
                         Circle().fill(Theme.cardHover)
-                            .frame(width: 20, height: 20)
-                            .overlay(Text(e).font(.system(size: 11)))
+                            .frame(width: m.emojiBadge, height: m.emojiBadge)
+                            .overlay(Text(e).font(.system(size: m.emojiBadgeFont)))
                             .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                            .offset(x: 6, y: 6)
+                            .offset(x: m.badgeOffset, y: m.badgeOffset)
                     }
                 }
         }
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: m.spacing) {
             tile
-                .frame(width: 34, height: 34)
+                .frame(width: m.tile, height: m.tile)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(statusName[chat.status] ?? "Unsure")
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
+                    Text(chat.title).font(.system(size: m.title, weight: .medium)).lineLimit(1)
                     Spacer(minLength: 6)
-                    Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                    Text(ageText(chat.engaged)).font(.system(size: m.age)).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 6) {
                     if chat.folder != prefs.homeFolder {
                         Text(chat.folder)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.system(size: m.folder, design: .monospaced))
                             .lineLimit(1).truncationMode(.middle)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
                             .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, m.folderGap)
                 if !chat.why.isEmpty {
-                    Text(chat.why).font(.system(size: 13)).foregroundStyle(Theme.text.opacity(0.85))
-                        .lineLimit(2).padding(.top, 7)
+                    Text(chat.why).font(.system(size: m.summary)).foregroundStyle(Theme.text.opacity(0.85))
+                        .lineLimit(m.summaryLines).padding(.top, m.summaryGap)
                 }
             }
         }
-        .padding(10)
+        .padding(m.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(hover ? Theme.cardHover : Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .background(RoundedRectangle(cornerRadius: m.corner).fill(hover ? Theme.cardHover : Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: m.corner).stroke(Theme.border, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: m.corner))
         .onHover { hover = $0 }
     }
 }

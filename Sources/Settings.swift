@@ -17,6 +17,8 @@ final class Prefs: ObservableObject {
 
     @Published var theme: String { didSet { d.set(theme, forKey: "theme"); applyTheme() } }
     @Published var cardIcon: String { didSet { d.set(cardIcon, forKey: "cardIcon") } }
+    // "default", "cozy" (a little smaller) or "compact" (smaller, one-line summary).
+    @Published var cardSize: String { didSet { d.set(cardSize, forKey: "cardSize") } }
     @Published var showEmoji: Bool { didSet { d.set(showEmoji, forKey: "showEmoji"); scriptChanged() } }
     @Published var emojiSource: String { didSet { d.set(emojiSource, forKey: "emojiSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -39,12 +41,13 @@ final class Prefs: ObservableObject {
 
     init() {
         d.register(defaults: [
-            "theme": "auto", "cardIcon": "status", "showEmoji": true, "emojiSource": "subject",
+            "theme": "auto", "cardIcon": "status", "cardSize": "default", "showEmoji": true, "emojiSource": "subject",
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiEmoji": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
         cardIcon = d.string(forKey: "cardIcon") ?? "status"
+        cardSize = d.string(forKey: "cardSize") ?? "default"
         showEmoji = d.bool(forKey: "showEmoji")
         emojiSource = d.string(forKey: "emojiSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
@@ -398,6 +401,14 @@ struct SettingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
             }
             Group_ {
+                Row(title: "Card size",
+                    helper: "Smaller cards fit more chats. Compact also cuts the summary to one line.") {
+                    Picker("Card size", selection: $prefs.cardSize) {
+                        Text("Default").tag("default"); Text("Cozy").tag("cozy"); Text("Compact").tag("compact")
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Hairline()
                 Row(title: "Card icon") {
                     Picker("Card icon", selection: $prefs.cardIcon) {
                         Text("Status first (emoji as a small badge)").tag("status")
