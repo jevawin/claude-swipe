@@ -21,6 +21,8 @@ struct Chat: Codable, Identifiable, Hashable {
     let cwd: String?
     var emoji: String?
     var own_emoji: Bool?  // your own pick decides the emoji (counted for Re-pick)
+    var parent: String?   // desktop id of the chat this one was started from
+    var family: String?   // top of its side-session chain; set only when 2+ listed chats share it
 }
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
@@ -272,7 +274,7 @@ struct Card: View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
         if prefs.showEmoji && prefs.cardIcon == "emoji" {
             RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(familyColor ?? Theme.border, lineWidth: familyColor == nil ? 1 : 2.5))
                 .overlay(Text(emoji ?? "💬").font(.system(size: 19)))
                 .overlay(alignment: .bottomTrailing) {
                     Circle().fill(st.color)
@@ -283,6 +285,7 @@ struct Card: View {
                 }
         } else {
             RoundedRectangle(cornerRadius: 9).fill(st.color)
+                .overlay { if let c = familyColor { RoundedRectangle(cornerRadius: 9).strokeBorder(c, lineWidth: 2.5) } }
                 .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
                 .overlay(alignment: .bottomTrailing) {
                     if let e = emoji {
@@ -296,12 +299,22 @@ struct Card: View {
         }
     }
 
+    // Linked chats (a chat and the side sessions started from it) share a border
+    // colour on the tile, under the badge. Picked from the family id with a fixed hash, so it stays
+    // the same between refreshes and launches. Hues steer clear of the status colours.
+    static let familyHues: [CGFloat] = [330, 175, 295, 75, 195, 18, 245, 150]
+    var familyColor: Color? {
+        guard let f = chat.family else { return nil }
+        let h = f.unicodeScalars.reduce(UInt32(2166136261)) { ($0 ^ $1.value) &* 16777619 }
+        return Color(nsColor: hsl(Card.familyHues[Int(h % UInt32(Card.familyHues.count))], 70, 55))
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             tile
                 .frame(width: 34, height: 34)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+                .accessibilityLabel((statusName[chat.status] ?? "Unsure") + (chat.family == nil ? "" : ", linked chat"))
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
