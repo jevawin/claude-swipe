@@ -322,13 +322,12 @@ struct Card: View {
     // colour on the tile, under the badge. Store.assignFamilyColours picks which one. Ordered so
     // neighbours contrast, and kept away from the status colours (blue, amber, red, green, purple).
     static let familyPalette: [NSColor] = [
-        0xE5398D,  // pink
-        0x12A39B,  // teal
-        0xF2C315,  // yellow
+        0xEE1D52,  // raspberry
+        0x0FA37F,  // jade (greener than sky, so the two don't blur)
+        0xF9DC1C,  // lemon (clear of the amber "waiting" colour)
         0x2E3F9E,  // navy
         0x8CC63F,  // lime
-        0x8A5530,  // brown
-        0x4FC3F7,  // sky
+        0x5CC8F5,  // sky
     ].map { NSColor(srgbRed: CGFloat($0 >> 16 & 0xFF) / 255, green: CGFloat($0 >> 8 & 0xFF) / 255, blue: CGFloat($0 & 0xFF) / 255, alpha: 1) }
     var familyColor: Color? {
         chat.familyColour.map { Color(nsColor: Card.familyPalette[$0 % Card.familyPalette.count]) }
