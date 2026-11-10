@@ -25,6 +25,7 @@ DESKTOP = Path(HOME, "Library/Application Support/Claude/claude-code-sessions")
 CACHE = Path(HOME, "Library/Caches/claude-swipe/verdicts.json")
 CHAT_EMOJI = Path(HOME, "Library/Application Support/claude-swipe/chat-emoji.json")  # "overrides" set from the panel
 FOLDER_EMOJI = Path(HOME, "Library/Application Support/claude-swipe/folder-emoji.json")  # edit "overrides" to taste
+PINNED = Path(HOME, "Library/Application Support/claude-swipe/pinned.json")  # "pinned" set from the panel
 MODEL = "haiku"  # set from --model
 HAIKU_BATCH = 30
 RUNNING_SECS = 90  # tool call or prompt with no reply younger than this = still working
@@ -147,8 +148,11 @@ def app_summary(dm, recs):
     return None
 
 
-def section(status, engaged):
-    """Group by when you last touched the chat, then by whether it needs you."""
+def section(status, engaged, pinned=False):
+    """Pinned chats first, then group by when you last touched the chat, then
+    by whether it needs you."""
+    if pinned:
+        return "pinned"
     if engaged < 3600:
         return "active"
     if status == "finished":
@@ -207,6 +211,15 @@ def load_chat_emoji():
     return {"overrides": d.get("overrides", {}), "auto": d.get("auto", {})}
 
 
+def load_pins():
+    """Session ids pinned from the panel. Pinned chats skip the --days cut-off
+    and never go to Done or Ready to clear."""
+    try:
+        return set(json.loads(PINNED.read_text()).get("pinned", []))
+    except Exception:
+        return set()
+
+
 def save_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False))
@@ -228,10 +241,12 @@ def chat_extras(rows, info, cache, pick_emoji, clear, judge_new, repick):
     todo = []
     for r in rows:
         fkey = "fin:" + info[r["id"]]["key"]
-        if clear and r["status"] == "done" and cache.get(fkey):
+        if r.get("pinned"):
+            fkey = None  # pinned chats are never ready to clear, so don't judge them
+        elif clear and r["status"] == "done" and cache.get(fkey):
             r["status"] = "finished"
         pick = pick_emoji and r["id"] not in data["overrides"] and r["id"] not in data["auto"]
-        judge = clear and judge_new and r["status"] == "done" and fkey not in cache
+        judge = bool(fkey) and clear and judge_new and r["status"] == "done" and fkey not in cache
         if pick or judge:
             item = {"id": r["id"], "title": r["title"],
                     "opening": info[r["id"]]["opening"][:300],
@@ -357,13 +372,14 @@ def main():
     meta = desktop_meta()
     cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
     rows, todo, info = [], [], {}
+    pins = load_pins()
 
     for f in glob.glob(str(PROJECTS / "*" / "*.jsonl")):
         mtime = os.path.getmtime(f)
         age = now - mtime
-        if age > args.days * 86400:
-            continue
         sid = Path(f).stem
+        if age > args.days * 86400 and sid not in pins:
+            continue
         dm = meta.get(sid)
         if not dm:
             continue  # no desktop chat to switch to (terminal, VS Code, headless runs)
@@ -384,7 +400,7 @@ def main():
                "folder": folder_label(dm.get("cwd") or m["cwd"], m["branch"]),
                "age": age, "engaged": now - touched, "app": "desktop",
                "desktop_id": dm.get("sessionId"),
-               "cwd": dm.get("cwd") or m["cwd"]}
+               "cwd": dm.get("cwd") or m["cwd"], "pinned": sid in pins}
         key = f"{sid}:{mtime}"
         info[sid] = {"key": key, "opening": first_prompt(recs), "reply": last_reply(recs)}
         if needs_ai:
@@ -419,8 +435,8 @@ def main():
         CACHE.write_text(json.dumps(cache))
 
     for r in rows:
-        r["section"] = section(r["status"], r["engaged"])
-    order = {"active": 0, "today": 1, "older": 2, "clear": 3, "done": 4}
+        r["section"] = section(r["status"], r["engaged"], r["pinned"])
+    order = {"pinned": -1, "active": 0, "today": 1, "older": 2, "clear": 3, "done": 4}
     rows.sort(key=lambda r: (order[r["section"]], r["engaged"]))
 
     if args.json:

@@ -4,6 +4,7 @@ A macOS menu bar app that slides out a panel of your recent Claude Code chats, s
 
 Chats are grouped as:
 
+- **Pinned**: chats you pinned, always at the top.
 - **Active**: anything you've touched in the last hour.
 - **Waiting · today** and **Waiting · older**: chats that need you, split by when you last touched them.
 - **Ready to clear**: done chats where the whole job is finished, so you can archive them. Only shown if you turn it on in Settings › AI.
@@ -35,6 +36,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 - **Open**: push the cursor against the right edge of the screen, press ⌃⌥C, or click the menu bar icon.
 - **Search**: start typing as soon as it opens. `acme` finds chats in an `acme` folder, `clients` finds every `clients/…` folder.
 - **Open a chat**: click it, or press Enter for the top match.
+- **Pin a chat**: right-click it and pick "Pin". Pinned chats stay at the top and never move to Done or Ready to clear, even if you haven't opened them in a week. Right-click and pick "Unpin" to put it back.
 - **Change a chat's emoji**: right-click it and pick "Change emoji…". Your pick always wins.
 - **Close**: move the cursor away, click elsewhere, or press Esc.
 - **Settings**: click the sliders button in the panel header, pick "Settings…" from the menu bar icon, or press ⌘, while the panel is open.
