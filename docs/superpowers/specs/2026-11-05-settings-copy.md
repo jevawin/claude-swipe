@@ -45,7 +45,8 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Card icon: Status first (emoji as a small badge) / Emoji first (status as a small badge)
 - Show emoji / Off: cards show the status icon on its own
 - Emoji from: Chat subject / Folder. Helper: Claude picks these, so AI must be on. Right-click a chat to pick your own.
-- Hide folder label for: None (plus folder names). Helper: Most chats sit in one folder. Hide that folder's label to keep cards tidy.
+- Hide all folder labels / Cards show no folder at all
+- Hide folder labels for: a checkbox per folder ("No folders yet" when there are none). Helper: Most chats sit in one or two folders. Hide those labels to keep cards tidy. Greyed out while Hide all folder labels is on.
 
 ## Settings › Windows
 - The same "Jump to the right window" block as Welcome step 2 (title, body, pictures, needs line), with the switch named "Minimise other Claude windows".

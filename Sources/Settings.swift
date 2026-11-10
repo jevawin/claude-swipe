@@ -19,7 +19,9 @@ final class Prefs: ObservableObject {
     @Published var cardIcon: String { didSet { d.set(cardIcon, forKey: "cardIcon") } }
     @Published var showEmoji: Bool { didSet { d.set(showEmoji, forKey: "showEmoji"); scriptChanged() } }
     @Published var emojiSource: String { didSet { d.set(emojiSource, forKey: "emojiSource"); scriptChanged() } }
-    @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
+    // Folders whose label is hidden on cards. Replaces the old single "homeFolder".
+    @Published var hiddenFolders: [String] { didSet { d.set(hiddenFolders, forKey: "hiddenFolders") } }
+    @Published var hideAllFolders: Bool { didSet { d.set(hideAllFolders, forKey: "hideAllFolders") } }
     @Published var minimiseOthers: Bool { didSet { d.set(minimiseOthers, forKey: "minimiseOthers") } }
     // Percent to fade Done cards by. Capped at 80 so they stay readable.
     @Published var doneFade: Double { didSet { d.set(doneFade, forKey: "doneFade") } }
@@ -40,14 +42,20 @@ final class Prefs: ObservableObject {
     init() {
         d.register(defaults: [
             "theme": "auto", "cardIcon": "status", "showEmoji": true, "emojiSource": "subject",
-            "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
+            "hideAllFolders": false, "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiEmoji": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
         cardIcon = d.string(forKey: "cardIcon") ?? "status"
         showEmoji = d.bool(forKey: "showEmoji")
         emojiSource = d.string(forKey: "emojiSource") ?? "subject"
-        homeFolder = d.string(forKey: "homeFolder") ?? ""
+        // First launch after the update: carry the old single hidden folder into the list.
+        if d.stringArray(forKey: "hiddenFolders") == nil {
+            let old = d.string(forKey: "homeFolder") ?? ""
+            d.set(old.isEmpty ? [] : [old], forKey: "hiddenFolders")
+        }
+        hiddenFolders = d.stringArray(forKey: "hiddenFolders") ?? []
+        hideAllFolders = d.bool(forKey: "hideAllFolders")
         minimiseOthers = d.bool(forKey: "minimiseOthers")
         doneFade = min(80, max(0, d.double(forKey: "doneFade")))
         showDone = d.bool(forKey: "showDone")
@@ -68,6 +76,13 @@ final class Prefs: ObservableObject {
     func applyTheme() {
         NSApp.appearance = theme == "light" ? NSAppearance(named: .aqua)
             : theme == "dark" ? NSAppearance(named: .darkAqua) : nil
+    }
+
+    func hidesLabel(_ folder: String) -> Bool { hideAllFolders || hiddenFolders.contains(folder) }
+
+    func setHidden(_ folder: String, _ hide: Bool) {
+        if hide { if !hiddenFolders.contains(folder) { hiddenFolders.append(folder) } }
+        else { hiddenFolders.removeAll { $0 == folder } }
     }
 
     var pickEmoji: Bool { showEmoji && aiEmoji }
@@ -382,9 +397,8 @@ struct SettingsView: View {
     }
 
     var folders: [String] {
-        var f = Array(Set(store.chats.map(\.folder))).sorted()
-        if !prefs.homeFolder.isEmpty && !f.contains(prefs.homeFolder) { f.insert(prefs.homeFolder, at: 0) }
-        return f
+        // Current chats' folders, plus hidden ones with no chats right now so they can be unticked.
+        Array(Set(store.chats.map(\.folder)).union(prefs.hiddenFolders)).sorted()
     }
 
     var cards: some View {
@@ -421,14 +435,29 @@ struct SettingsView: View {
                 }
                 .disabled(!prefs.showEmoji)
                 Hairline()
-                Row(title: "Hide folder label for",
-                    helper: "Most chats sit in one folder. Hide that folder's label to keep cards tidy.") {
-                    Picker("Hide folder label for", selection: $prefs.homeFolder) {
-                        Text("None").tag("")
-                        ForEach(folders, id: \.self) { Text($0).tag($0) }
-                    }
-                    .labelsHidden().frame(maxWidth: 220)
+                Row(title: "Hide all folder labels", helper: "Cards show no folder at all") {
+                    Toggle("Hide all folder labels", isOn: $prefs.hideAllFolders)
+                        .toggleStyle(.switch).labelsHidden()
                 }
+                Hairline()
+                Row(title: "Hide folder labels for",
+                    helper: "Most chats sit in one or two folders. Hide those labels to keep cards tidy.") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if folders.isEmpty {
+                            Text("No folders yet").foregroundStyle(Theme.secondary)
+                        }
+                        ForEach(folders, id: \.self) { f in
+                            Toggle(isOn: Binding(get: { prefs.hiddenFolders.contains(f) },
+                                                 set: { prefs.setHidden(f, $0) })) {
+                                Text(f).lineLimit(1).truncationMode(.middle)
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                    .frame(maxWidth: 220, alignment: .leading)
+                }
+                .disabled(prefs.hideAllFolders)
+                .opacity(prefs.hideAllFolders ? 0.5 : 1)
                 Hairline()
                 Row(title: "Fade done chats",
                     helper: "Done chats show fainter so open work stands out. 80% at most, so they stay readable.") {

@@ -309,7 +309,7 @@ struct Card: View {
                     Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 6) {
-                    if chat.folder != prefs.homeFolder {
+                    if !prefs.hidesLabel(chat.folder) {
                         Text(chat.folder)
                             .font(.system(size: 12, design: .monospaced))
                             .lineLimit(1).truncationMode(.middle)
