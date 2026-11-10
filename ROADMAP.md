@@ -60,6 +60,7 @@ In the order kevawin plans to build them, one branch and PR each. Items 11 to 13
 15. **Custom shortcut.** Let people choose their own hotkey in Settings › General instead of the fixed ⌃⌥C. The welcome screen's "Press Control-Option-C" line shows whatever is set, so rerunning the welcome screen after a change reminds you of your own shortcut.
 16. **Turn off or rename sections, and drag chats between them.** Overlaps item 7, which already plans grouping as a setting (including "none"). Dragging a chat to another section would be a manual override, like item 7's right-click "not finished" idea. Agree the approach with item 7 before building.
 17. **A new name (suggestion).** Something about switching, such as Claude Switcher, since the app is for switching between chats and windows. Jamie's call. Changing the bundle ID would reset everyone's window permission, so the display name might change without it.
+18. **Hide labels for more than one folder (question for Jamie).** Settings › Cards lets you hide the label for one folder only. Some people might want to hide two out of three, or hide all folder labels because they don't care where a chat lives. Options: a multi-select list of folders, plus a "hide all folder labels" switch. Is this worth doing, or is one folder enough for most people? It may fit with item 4's list of project roots.
 
 ## Later
 
