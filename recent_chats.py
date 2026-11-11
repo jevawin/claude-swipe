@@ -4,7 +4,7 @@ blocked / done / finished, each with a subject emoji.
 
 Sources (both undocumented, read-only):
 - ~/.claude/projects/<dashed-cwd>/<cli-session-id>.jsonl   transcripts
-- ~/Library/Application Support/Claude/claude-code-sessions/*/*/local_*.json
+- ~/Library/Application Support/Claude/claude-code-sessions/<account>/<org>/local_*.json
   desktop app metadata: title, cwd, isArchived, cliSessionId
 
 Rules decide most chats. With --sort, ones the rules can't call go to the
@@ -30,10 +30,25 @@ HAIKU_BATCH = 30
 RUNNING_SECS = 90  # tool call or prompt with no reply younger than this = still working
 
 
-def desktop_meta():
-    """cliSessionId -> desktop metadata."""
-    out = {}
+def current_account_dir():
+    """The <account>/<org> folder the app is using now.
+
+    The app keeps one folder per account and organisation, and old ones stay
+    on disk after you switch. It only shows the current one, so we pick the
+    folder with the most recently written session file."""
+    newest = {}
     for f in DESKTOP.glob("*/*/local_*.json"):
+        newest[f.parent] = max(newest.get(f.parent, 0), f.stat().st_mtime)
+    return max(newest, key=newest.get) if newest else None
+
+
+def desktop_meta():
+    """cliSessionId -> desktop metadata, for the current account only."""
+    out = {}
+    folder = current_account_dir()
+    if folder is None:
+        return out
+    for f in folder.glob("local_*.json"):
         try:
             d = json.loads(f.read_text())
         except Exception:
