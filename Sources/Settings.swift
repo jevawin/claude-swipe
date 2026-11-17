@@ -114,7 +114,7 @@ final class SystemStatus: ObservableObject {
             p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             p.arguments = ["claude", "auth", "status", "--json"]
             var env = ProcessInfo.processInfo.environment
-            env["PATH"] = "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+            env["PATH"] = Self.cliPath
             p.environment = env
             let out = Pipe()
             p.standardOutput = out
@@ -132,6 +132,35 @@ final class SystemStatus: ObservableObject {
                 }
             }
             DispatchQueue.main.async { self.claude = result }
+        }
+    }
+
+    private static let cliPath = "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    private var signInPoll: Timer?
+
+    // Opens Terminal running `claude auth login`. Opening a .command file runs it
+    // in Terminal with no Automation prompt (measured: `open x.command` ran it in 2s).
+    // Then re-checks every 3s for up to 5 minutes, so the light turns green on its own.
+    func signIn() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("claudeswipe-sign-in.command")
+        let script = """
+        #!/bin/zsh
+        export PATH="\(Self.cliPath):$PATH"
+        claude auth login
+        echo
+        echo "Done. You can close this window."
+        """
+        do {
+            try script.write(to: url, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        } catch { return }
+        NSWorkspace.shared.open(url)
+
+        signInPoll?.invalidate()
+        let deadline = Date().addingTimeInterval(300)
+        signInPoll = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] t in
+            guard let self, self.claude != .ready, Date() < deadline else { t.invalidate(); return }
+            self.checkClaude()
         }
     }
 }
@@ -204,11 +233,20 @@ struct StatusLight: View {
 
 struct ClaudeStatusLine: View {
     let state: ClaudeCLI
+    var onSignIn: (() -> Void)? = nil
     var body: some View {
         if state != .unknown {
-            StatusLight(ok: state == .ready, text: state == .ready ? "claude command found and signed in"
-                        : state == .signedOut ? "claude command found but not signed in"
-                        : "claude command not found")
+            HStack(spacing: 10) {
+                StatusLight(ok: state == .ready, text: state == .ready ? "claude command found and signed in"
+                            : state == .signedOut ? "claude command found but not signed in"
+                            : "claude command not found")
+                if state == .signedOut, let onSignIn {
+                    Button("Sign in", action: onSignIn)
+                        .buttonStyle(.link).font(.system(size: 12))
+                        .help("Opens Terminal and runs claude auth login")
+                        .accessibilityHint("Opens Terminal and runs claude auth login")
+                }
+            }
         }
     }
 }
@@ -659,7 +697,7 @@ struct AIIntro: View {
             }
             WarningBox(text: warning)
             PrivacyNote(text: "ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.")
-            ClaudeStatusLine(state: status.claude)
+            ClaudeStatusLine(state: status.claude, onSignIn: status.signIn)
         }
         .padding(14)
     }
