@@ -67,6 +67,16 @@ In the order kevawin plans to build them, one branch and PR each. Items 11 to 13
 8. **Icon library** (Lucide) as an alternative to emojis.
 9. **Trackpad edge swipe.** Parked while you test the cursor-edge trigger.
 10. **Signing with an Apple Developer certificate**, once the account exists. The self-signed "ClaudeSwipe Local" option from PR #1 stays until then.
+19. **Small bugs left from the panel redesign (PR #16).** From the final branch review, 19 Nov 2026; none seen on screen yet:
+   - Closing Settings leaves the panel up until you click in another app, if the cursor never entered the panel.
+   - Dragging Settings to another screen calls `show()`, which makes the panel key and clears the search.
+   - Minimising Settings lets the panel hide, and restoring Settings doesn't bring it back.
+   - The first Settings open puts the panel on the screen `center()` chose, not the mouse's screen. The comment says otherwise.
+   - `settingsOrigin` doesn't clamp a Settings window taller or wider than the screen.
+   - `firstMatch` is recomputed for every row on every hover.
+   - The `bringUp` comment is out of date.
+   - Weak tests: one half of an `effective` test can't fail, and no Python test covers `main()`'s row path.
+20. **Run on older macOS.** `build.sh` passes no `-target`, so the app's minimum OS is whatever builds it (27.0 today, read with `otool`). Add `-target arm64-apple-macos14.0`; `swiftc -typecheck` with that target already passes. Glass needs macOS 26 and falls back to Frosted below it.
 
 ## Parked
 

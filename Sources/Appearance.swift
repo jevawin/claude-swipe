@@ -19,8 +19,8 @@ struct AppearanceValues: Equatable {
     var opacity: Double  // percent of paint: panel tint and group fill, opacityFloor...100
 }
 
-// The lowest opacity the See-through slider allows. 0 while Jamie tries blur and glass
-// on their own (19 Nov 2026); he picks the real floor after. The slider and load-time
+// The lowest opacity the See-through slider allows. 0, so See-through goes to 100%:
+// Jamie tried blur and glass on their own and kept it (19 Nov 2026). The slider and load-time
 // clamping read this.
 let opacityFloor: Double = 0
 

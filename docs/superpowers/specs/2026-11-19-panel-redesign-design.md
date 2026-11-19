@@ -15,8 +15,8 @@ This replaces the Blur, Edge fade, Glass and Style rows below. Where they confli
   - **Density**: its own group.
   - Reset to defaults: Frosted, See-through 34% (opacity 66), Cozy, Auto theme.
 - **Cut:** Edge fade, the Blur choice, Glass Regular/Clear, Style presets and the Custom tag.
-- **Opacity floor** is 0 while Jamie tests; he sets the real one (the white-window contrast rule still applies).
-- **Known, unresolved:** with Glass, the gaps between groups show what's behind unblurred, so section headers rely on the glow. At high See-through over a busy light window they're hard to read.
+- **Opacity floor** is 0, so See-through goes to 100%. Jamie tested it and kept it (19 Nov 2026).
+- **Known and accepted:** with Glass, the gaps between groups show what's behind unblurred, so section headers rely on the glow. At high See-through over a busy light window they're harder to read. Jamie checked it and is fine with it (19 Nov 2026).
 - Section headers get the glow whenever the panel isn't opaque. Only Done has a chevron.
 
 ## Why

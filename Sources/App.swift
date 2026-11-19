@@ -429,7 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Glass has no panel material, so with See-through above 0 the gaps between groups are
         // part-transparent and scrolls there went to the window behind (Jamie, 19 Nov 2026).
         // Setting this explicitly is meant to make the whole frame take mouse and scroll
-        // events. Unverified here: synthetic scroll events from a harness were dropped.
+        // events. Checked by Jamie on screen, 19 Nov 2026 (harness scroll events were dropped).
         panel.ignoresMouseEvents = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
