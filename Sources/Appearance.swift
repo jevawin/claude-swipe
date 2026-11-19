@@ -16,9 +16,10 @@ struct AppearanceValues: Equatable {
     var glass: GlassStyle
 }
 
-// The lowest panel opacity the slider allows. Starter value; Jamie tunes it.
-// The slider minimum, Clear's opacity and load-time clamping all read this.
-let opacityFloor: Double = 60
+// The lowest panel opacity the slider allows. 0 while Jamie tries blur and glass on
+// their own (19 Nov 2026); he picks the real floor after. The slider minimum,
+// Clear's opacity and load-time clamping all read this.
+let opacityFloor: Double = 0
 
 enum StylePreset: String, CaseIterable {
     case solid, frosted, clear

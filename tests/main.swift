@@ -14,8 +14,8 @@ check("presetsMatchSpec",
   StylePreset.clear.values == AppearanceValues(opacity: opacityFloor, blur: .heavy, fade: 70, glass: .clear))
 check("defaultIsFrosted", matchedPreset(defaultAppearance) == .frosted)
 check("customWhenTouched", matchedPreset(AppearanceValues(opacity: 67, blur: .light, fade: 40, glass: .regular)) == nil)
-check("clampedToFloor", clampedToFloor(AppearanceValues(opacity: 20, blur: .light, fade: 140, glass: .off)).opacity == 60
-  && clampedToFloor(AppearanceValues(opacity: 20, blur: .light, fade: 140, glass: .off)).fade == 100)
+check("clampedToFloor", clampedToFloor(AppearanceValues(opacity: -20, blur: .light, fade: 140, glass: .off)).opacity == opacityFloor
+  && clampedToFloor(AppearanceValues(opacity: -20, blur: .light, fade: 140, glass: .off)).fade == 100)
 let custom = AppearanceValues(opacity: 70, blur: .heavy, fade: 55, glass: .clear)
 check("effectiveSolidKeepsInput", effective(custom, solidRequired: true, glassAvailable: true)
   == AppearanceValues(opacity: 100, blur: .off, fade: 0, glass: .off) && custom.opacity == 70)

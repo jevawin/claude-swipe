@@ -264,10 +264,12 @@ struct PanelView: View {
             Text(sec.label).font(.system(size: 12.5, weight: .semibold))
             Text(" \(items.count)").font(.system(size: 12.5)).opacity(0.8)
             Spacer()
-            // Only Done collapses for now; the others always show open.
-            Image(systemName: open_ ? "chevron.down" : "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
-                .accessibilityHidden(true)
+            // Only Done collapses for now, so only Done gets a chevron.
+            if collapsible {
+                Image(systemName: open_ ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
         }
         .foregroundStyle(Theme.text)
         .modifier(HeaderGlow(on: look.fade > 0))
