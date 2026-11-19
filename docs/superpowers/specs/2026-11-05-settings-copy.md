@@ -66,9 +66,9 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Pick a topic icon for each chat / Off: chats show their state icon, or your own pick
 - Ready to clear section / Checks each done chat once more to see if the whole job is finished. Chats that pass get their own section.
 - Re-pick all topic icons / Changing the model or icon source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay. / Button: Re-pick…
-- Re-pick confirm dialog title: Re-pick all emoji?
-- Re-pick confirm dialog body: ClaudeSwipe will ask {model} to pick an emoji again for {count} chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change.
-- Re-pick confirm dialog body (when Emoji from is Folder): ClaudeSwipe will ask {model} to pick an emoji again for {count} folders with chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change.
+- Re-pick confirm dialog title: Re-pick all topic icons?
+- Re-pick confirm dialog body: ClaudeSwipe will ask {model} to pick a topic icon again for {count} chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change.
+- Re-pick confirm dialog body (when Topic icon from is Folder): ClaudeSwipe will ask {model} to pick a topic icon again for {count} folders with chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change.
 - Re-pick confirm dialog buttons: Re-pick / Cancel
 - Status line: claude command found and signed in
 
