@@ -268,7 +268,7 @@ def chat_extras(rows, info, cache, pick_icon, clear, judge_new, repick, allow):
         fkey = "fin:" + info[r["id"]]["key"]
         if clear and r["status"] == "done" and cache.get(fkey):
             r["status"] = "finished"
-        pick = pick_icon and r["id"] not in data["overrides"] and r["id"] not in data["auto"]
+        pick = pick_icon and bool(allow) and r["id"] not in data["overrides"] and r["id"] not in data["auto"]
         judge = clear and judge_new and r["status"] == "done" and fkey not in cache
         if pick or judge:
             item = {"id": r["id"], "title": r["title"],
@@ -300,9 +300,9 @@ def chat_extras(rows, info, cache, pick_icon, clear, judge_new, repick, allow):
             continue
         for r, fkey, item in batch:
             x = out.get(r["id"], {})
-            # Names off the list are dropped, so the auto entry stays unset.
-            if item["pick_icon"] and valid_icon(x.get("icon"), allow):
-                picked[r["id"]] = x["icon"]
+            # A name off the list is saved as "" (no icon), so it isn't asked about again.
+            if item["pick_icon"] and "icon" in x:
+                picked[r["id"]] = valid_icon(x["icon"], allow) or ""
             if item["judge_finished"] and "finished" in x:
                 cache[fkey] = bool(x["finished"])
                 if x["finished"]:
@@ -333,7 +333,7 @@ def folder_icons(folders, use_ai, repick, allow):
             auto.pop(f, None)
         save_json(FOLDER_ICONS, data)
     missing = sorted({f for f in folders if not from_override(f) and f not in auto})
-    if missing and use_ai:
+    if missing and use_ai and allow:
         prompt = (
             "Pick one icon for each project folder so a person can spot it at a glance. "
             "Evoke what the folder name suggests. Pick ONLY names from this list, spelled "
@@ -341,8 +341,9 @@ def folder_icons(folders, use_ai, repick, allow):
             "Reply with ONLY a JSON object of {folder: icon}.\n\n" + json.dumps(missing))
         try:
             raw = haiku(prompt)
-            auto.update({k: v for k, v in json.loads(raw[raw.find("{"): raw.rfind("}") + 1]).items()
-                         if k in missing and valid_icon(v, allow)})
+            # Names off the list are saved as "" (no icon), so they aren't asked about again.
+            auto.update({k: valid_icon(v, allow) or "" for k, v in
+                         json.loads(raw[raw.find("{"): raw.rfind("}") + 1]).items() if k in missing})
             save_json(FOLDER_ICONS, data)
         except Exception as e:
             print(f"[ai folder icon failed: {e}]", file=sys.stderr)

@@ -40,5 +40,17 @@ check("topicSymbolListed", topicSymbol("key", status: "waiting", allow: ["key"])
 check("topicSymbolFallback", topicSymbol("🔑", status: "waiting", allow: ["key"]) == "questionmark")
 check("topicSymbolNil", topicSymbol(nil, status: "done", allow: ["key"]) == "checkmark")
 
+let d2 = UserDefaults(suiteName: "test.\(UUID())")!
+d2.set(true, forKey: "aiEmoji"); d2.set(false, forKey: "showEmoji")
+migrateIconPrefs(d2)
+check("migrationKeepsEmojiOffAsAIOff", d2.bool(forKey: "aiIcon") == false)
+let d3 = UserDefaults(suiteName: "test.\(UUID())")!
+d3.set(true, forKey: "aiEmoji")  // showEmoji never set: it defaulted to on
+migrateIconPrefs(d3)
+check("migrationShowEmojiDefaultOn", d3.bool(forKey: "aiIcon") == true)
+check("hideBlockedWhileSettingsOpen", !panelMayHide(settingsOpen: true, explicit: false))
+check("explicitHideWhileSettingsOpen", panelMayHide(settingsOpen: true, explicit: true))
+check("hideWhenSettingsClosed", panelMayHide(settingsOpen: false, explicit: false))
+
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

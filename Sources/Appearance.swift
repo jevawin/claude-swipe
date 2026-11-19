@@ -79,7 +79,12 @@ func settingsOrigin(window: CGSize, panel: CGRect, visible: CGRect) -> CGPoint {
 func migrateIconPrefs(_ d: UserDefaults) {
     guard !d.bool(forKey: "iconPrefsMigrated") else { return }
     if let s = d.string(forKey: "emojiSource") { d.set(s, forKey: "iconSource") }
-    if d.object(forKey: "aiEmoji") != nil { d.set(d.bool(forKey: "aiEmoji"), forKey: "aiIcon") }
+    // The old gate was showEmoji && aiEmoji (showEmoji defaulted to on), so AI picks
+    // that were off because emoji were hidden stay off.
+    if d.object(forKey: "aiEmoji") != nil {
+        let shown = d.object(forKey: "showEmoji") == nil || d.bool(forKey: "showEmoji")
+        d.set(d.bool(forKey: "aiEmoji") && shown, forKey: "aiIcon")
+    }
     d.removeObject(forKey: "cardIcon")
     d.removeObject(forKey: "showEmoji")
     d.set(true, forKey: "iconPrefsMigrated")
@@ -96,4 +101,10 @@ let statusSymbol: [String: String] = [
 func topicSymbol(_ icon: String?, status: String, allow: Set<String>) -> String {
     if let i = icon, allow.contains(i) { return i }
     return statusSymbol[status] ?? statusSymbol["unsure"]!
+}
+
+// While Settings is open, the panel stays up through stray clicks and the cursor
+// leaving. Only an explicit action (opening a chat, Esc, the hotkey) hides it.
+func panelMayHide(settingsOpen: Bool, explicit: Bool) -> Bool {
+    !settingsOpen || explicit
 }

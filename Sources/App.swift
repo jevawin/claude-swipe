@@ -455,7 +455,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return nil
             }
             if e.keyCode == UInt16(kVK_Escape) && e.window === self?.panel {
-                if let s = self?.store, !s.query.isEmpty { s.query = "" } else { self?.hide() }
+                if let s = self?.store, !s.query.isEmpty { s.query = "" } else { self?.hide(reason: "esc", explicit: true) }
                 return nil
             }
             return e
@@ -531,7 +531,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func toggle() {
-        if shown { hide(); return }
+        if shown { hide(reason: "toggle", explicit: true); return }
         let p = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) ?? NSScreen.main!
         show(on: screen)
@@ -563,8 +563,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // The panel stays up the whole time Settings is open, so changes show live.
     var settingsOpen: Bool { settingsWindow?.isVisible == true }
 
-    func hide(reason: String = "") {
-        guard shown, !settingsOpen else { return }
+    // explicit: you asked for it (opened a chat, Esc, the hotkey), so it hides even with Settings open.
+    func hide(reason: String = "", explicit: Bool = false) {
+        guard shown, panelMayHide(settingsOpen: settingsOpen, explicit: explicit) else { return }
         debugLog("hide \(reason)")
         shown = false
         let f = panel.frame
@@ -581,7 +582,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Settings › Windows › Minimise other Claude windows; Option flips it for one click.
         let keepOthers = Prefs.shared.minimiseOthers == NSEvent.modifierFlags.contains(.option)
         guard let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") else { return }
-        hide()
+        hide(reason: "open chat", explicit: true)
         // The deep link always loads the chat in the main window, so first try to
         // raise a window already showing it (a pop-out, or the main window itself).
         if let w = raiseClaudeWindow(titled: c.title) {
