@@ -264,24 +264,12 @@ struct Card: View {
     @ObservedObject var prefs = Prefs.shared
     @LocalState private var hover = false
 
-    var emoji: String? { prefs.showEmoji ? chat.emoji.flatMap { $0.isEmpty ? nil : $0 } : nil }
+    var emoji: String? { chat.emoji.flatMap { $0.isEmpty ? nil : $0 } }
 
     // Settings › Cards › Card icon. "status": status tile with the emoji as a badge
     // (no emoji, no badge). "emoji": emoji tile (💬 if none) with the status as a badge.
     @ViewBuilder var tile: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
-        if prefs.showEmoji && prefs.cardIcon == "emoji" {
-            RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
-                .overlay(Text(emoji ?? "💬").font(.system(size: 19)))
-                .overlay(alignment: .bottomTrailing) {
-                    Circle().fill(st.color)
-                        .frame(width: 18, height: 18)
-                        .overlay(Image(systemName: st.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                        .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                        .offset(x: 6, y: 6)
-                }
-        } else {
             RoundedRectangle(cornerRadius: 9).fill(st.color)
                 .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
                 .overlay(alignment: .bottomTrailing) {
@@ -293,7 +281,6 @@ struct Card: View {
                             .offset(x: 6, y: 6)
                     }
                 }
-        }
     }
 
     var body: some View {
@@ -703,7 +690,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Count comes from the last refresh: chats without your own pick, or their distinct folders.
     func confirmRepick() {
         let p = Prefs.shared
-        let folder = p.emojiSource == "folder"
+        let folder = p.iconSource == "folder"
         let rows = store.chats.filter { $0.own_emoji != true }
         let n = folder ? Set(rows.map(\.folder)).count : rows.count
         let noun = folder ? (n == 1 ? "folder" : "folders") : (n == 1 ? "chat" : "chats")

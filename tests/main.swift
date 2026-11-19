@@ -29,5 +29,12 @@ check("settingsOriginShiftsLeft", settingsOrigin(window: CGSize(width: 760, heig
 let narrow = CGRect(x: 0, y: 0, width: 1000, height: 700)
 check("settingsOriginNarrowScreen", settingsOrigin(window: CGSize(width: 760, height: 580), panel: CGRect(x: 560, y: 0, width: 440, height: 700), visible: narrow).x == 0)
 
+let d = UserDefaults(suiteName: "test.\(UUID())")!
+d.set("folder", forKey: "emojiSource"); d.set(true, forKey: "aiEmoji"); d.set("emoji", forKey: "cardIcon")
+migrateIconPrefs(d)
+check("migrationCopies", d.string(forKey: "iconSource") == "folder" && d.bool(forKey: "aiIcon") && d.object(forKey: "cardIcon") == nil)
+d.set("subject", forKey: "iconSource"); migrateIconPrefs(d)
+check("migrationRunsOnce", d.string(forKey: "iconSource") == "subject")
+
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

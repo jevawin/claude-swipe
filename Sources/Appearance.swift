@@ -73,3 +73,14 @@ func settingsOrigin(window: CGSize, panel: CGRect, visible: CGRect) -> CGPoint {
     let y = visible.minY + (visible.height - window.height) / 2
     return CGPoint(x: x, y: y)
 }
+
+// One-time copy of the old emoji prefs to the topic icon keys. Runs once per
+// defaults domain (flag iconPrefsMigrated), so later changes are never overwritten.
+func migrateIconPrefs(_ d: UserDefaults) {
+    guard !d.bool(forKey: "iconPrefsMigrated") else { return }
+    if let s = d.string(forKey: "emojiSource") { d.set(s, forKey: "iconSource") }
+    if d.object(forKey: "aiEmoji") != nil { d.set(d.bool(forKey: "aiEmoji"), forKey: "aiIcon") }
+    d.removeObject(forKey: "cardIcon")
+    d.removeObject(forKey: "showEmoji")
+    d.set(true, forKey: "iconPrefsMigrated")
+}

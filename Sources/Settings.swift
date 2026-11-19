@@ -16,9 +16,16 @@ final class Prefs: ObservableObject {
     private var pending: DispatchWorkItem?
 
     @Published var theme: String { didSet { d.set(theme, forKey: "theme"); applyTheme() } }
-    @Published var cardIcon: String { didSet { d.set(cardIcon, forKey: "cardIcon") } }
-    @Published var showEmoji: Bool { didSet { d.set(showEmoji, forKey: "showEmoji"); scriptChanged() } }
-    @Published var emojiSource: String { didSet { d.set(emojiSource, forKey: "emojiSource"); scriptChanged() } }
+    // The panel's see-through values, one set for both themes. Loaded through clampedToFloor.
+    @Published var appearance: AppearanceValues {
+        didSet {
+            d.set(appearance.opacity, forKey: "panelOpacity"); d.set(appearance.blur.rawValue, forKey: "panelBlur")
+            d.set(appearance.fade, forKey: "panelFade"); d.set(appearance.glass.rawValue, forKey: "panelGlass")
+        }
+    }
+    @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
+    // Where topic icons come from: "subject" or "folder".
+    @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
     @Published var minimiseOthers: Bool { didSet { d.set(minimiseOthers, forKey: "minimiseOthers") } }
     // Percent to fade Done cards by. Capped at 80 so they stay readable.
@@ -28,7 +35,7 @@ final class Prefs: ObservableObject {
     // Model changes only affect new picks, so no refresh.
     @Published var aiModel: String { didSet { d.set(aiModel, forKey: "aiModel") } }
     @Published var aiSort: Bool { didSet { d.set(aiSort, forKey: "aiSort"); scriptChanged() } }
-    @Published var aiEmoji: Bool { didSet { d.set(aiEmoji, forKey: "aiEmoji"); scriptChanged() } }
+    @Published var aiIcon: Bool { didSet { d.set(aiIcon, forKey: "aiIcon"); scriptChanged() } }
     @Published var aiClear: Bool { didSet { d.set(aiClear, forKey: "aiClear"); scriptChanged() } }
     @Published var loginOn = false  // mirrors SMAppService; set by AppDelegate.updateLoginItem
 
@@ -38,22 +45,30 @@ final class Prefs: ObservableObject {
     }
 
     init() {
+        migrateIconPrefs(d)
         d.register(defaults: [
-            "theme": "auto", "cardIcon": "status", "showEmoji": true, "emojiSource": "subject",
+            "theme": "auto", "iconSource": "subject",
+            "panelOpacity": defaultAppearance.opacity, "panelBlur": defaultAppearance.blur.rawValue,
+            "panelFade": defaultAppearance.fade, "panelGlass": defaultAppearance.glass.rawValue,
+            "density": Density.cozy.rawValue,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
-            "aiSort": false, "aiEmoji": false, "aiClear": false,
+            "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
-        cardIcon = d.string(forKey: "cardIcon") ?? "status"
-        showEmoji = d.bool(forKey: "showEmoji")
-        emojiSource = d.string(forKey: "emojiSource") ?? "subject"
+        appearance = clampedToFloor(AppearanceValues(
+            opacity: d.double(forKey: "panelOpacity"),
+            blur: BlurLevel(rawValue: d.string(forKey: "panelBlur") ?? "") ?? defaultAppearance.blur,
+            fade: d.double(forKey: "panelFade"),
+            glass: GlassStyle(rawValue: d.string(forKey: "panelGlass") ?? "") ?? defaultAppearance.glass))
+        density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
+        iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
         doneFade = min(80, max(0, d.double(forKey: "doneFade")))
         showDone = d.bool(forKey: "showDone")
         aiModel = d.string(forKey: "aiModel") ?? "haiku"
         aiSort = d.bool(forKey: "aiSort")
-        aiEmoji = d.bool(forKey: "aiEmoji")
+        aiIcon = d.bool(forKey: "aiIcon")
         aiClear = d.bool(forKey: "aiClear")
     }
 
@@ -70,16 +85,23 @@ final class Prefs: ObservableObject {
             : theme == "dark" ? NSAppearance(named: .darkAqua) : nil
     }
 
-    var pickEmoji: Bool { showEmoji && aiEmoji }
-    var anyAI: Bool { aiSort || aiClear || pickEmoji }
+    // Theme, density and the four background values back to their defaults.
+    func resetAppearance() {
+        theme = "auto"
+        appearance = defaultAppearance
+        density = .cozy
+    }
+
+    var pickIcon: Bool { aiIcon }
+    var anyAI: Bool { aiSort || aiClear || pickIcon }
     var modelName: String { aiModel == "sonnet" ? "Sonnet" : "Haiku" }
 
     // Flags for recent_chats.py. Every AI flag is opt-in, so none set means no requests.
     var scriptArgs: [String] {
-        var a = ["--model", aiModel, "--emoji-from", emojiSource]
+        var a = ["--model", aiModel, "--emoji-from", iconSource]  // script flags renamed in the topic icons change
         if aiSort { a.append("--sort") }
         if aiClear { a.append("--clear") }
-        if pickEmoji { a += ["--emoji", emojiSource] }
+        if pickIcon { a += ["--emoji", iconSource] }
         return a
     }
 }
@@ -398,28 +420,13 @@ struct SettingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
             }
             Group_ {
-                Row(title: "Card icon") {
-                    Picker("Card icon", selection: $prefs.cardIcon) {
-                        Text("Status first (emoji as a small badge)").tag("status")
-                        Text("Emoji first (status as a small badge)").tag("emoji")
-                    }
-                    .pickerStyle(.radioGroup).labelsHidden().fixedSize()
-                }
-                .disabled(!prefs.showEmoji)
-                .opacity(prefs.showEmoji ? 1 : 0.5)
-                Hairline()
-                Row(title: "Show emoji", helper: "Off: cards show the status icon on its own") {
-                    Toggle("Show emoji", isOn: $prefs.showEmoji).toggleStyle(.switch).labelsHidden()
-                }
-                Hairline()
                 Row(title: "Emoji from",
                     helper: "Claude picks these, so AI must be on. Right-click a chat to pick your own.") {
-                    Picker("Emoji from", selection: $prefs.emojiSource) {
+                    Picker("Emoji from", selection: $prefs.iconSource) {
                         Text("Chat subject").tag("subject"); Text("Folder").tag("folder")
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
-                .disabled(!prefs.showEmoji)
                 Hairline()
                 Row(title: "Hide folder label for",
                     helper: "Most chats sit in one folder. Hide that folder's label to keep cards tidy.") {
@@ -471,7 +478,7 @@ struct SettingsView: View {
                 }
                 Hairline()
                 Row(title: "Let AI pick emoji", helper: "Off: only your own emoji picks show") {
-                    Toggle("Let AI pick emoji", isOn: $prefs.aiEmoji).toggleStyle(.switch).labelsHidden()
+                    Toggle("Let AI pick emoji", isOn: $prefs.aiIcon).toggleStyle(.switch).labelsHidden()
                 }
                 Hairline()
                 Row(title: "Ready to clear section",
@@ -486,7 +493,7 @@ struct SettingsView: View {
                     Button("Re-pick…") { actions.repick() }
                 }
             }
-            .disabled(!ready || !prefs.pickEmoji)
+            .disabled(!ready || !prefs.pickIcon)
         }
     }
 }
@@ -583,8 +590,8 @@ struct WelcomeView: View {
                 Hairline()
                 Row(title: "Use my Claude plan", helper: "Off until you turn it on. Pick the model and more in Settings › AI.") {
                     Toggle("Use my Claude plan", isOn: Binding(
-                        get: { prefs.aiSort && prefs.aiEmoji },
-                        set: { prefs.aiSort = $0; prefs.aiEmoji = $0 }))
+                        get: { prefs.aiSort && prefs.aiIcon },
+                        set: { prefs.aiSort = $0; prefs.aiIcon = $0 }))
                         .toggleStyle(.switch).labelsHidden()
                 }
                 .disabled(status.claude != .ready)
