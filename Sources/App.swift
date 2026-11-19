@@ -329,7 +329,7 @@ struct StateIcon: View {
 }
 
 // One chat in a section group. Cozy: icon, title over summary, age over folder.
-// Compact: one line, with the summary only on the selected row.
+// Compact: one line, no summary, and it doesn't grow on hover (Jamie, 19 Nov 2026).
 struct ChatRow: View {
     let chat: Chat
     let selected: Bool
@@ -372,17 +372,14 @@ struct ChatRow: View {
             } else {
                 HStack(alignment: .center, spacing: 10) {
                     icon
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                            Spacer(minLength: 8)
-                            Group {
-                                if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
-                                Text(ageText(chat.engaged))
-                            }
-                            .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
+                    HStack(spacing: 8) {
+                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Group {
+                            if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
+                            Text(ageText(chat.engaged))
                         }
-                        if selected && !chat.why.isEmpty { summary }
+                        .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
                     }
                 }
                 .padding(.vertical, 8)

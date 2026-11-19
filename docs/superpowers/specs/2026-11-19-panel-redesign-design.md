@@ -87,7 +87,7 @@ The panel was never designed. It feels busy, soft and unfinished: cards with bor
 - **Rows (compact):**
   - 8pt vertical padding, with a 24pt icon.
   - One line: title, then folder and age.
-  - The summary shows only on the selected row.
+  - No summary, and rows never grow on hover or selection (changed 19 Nov 2026, Jamie).
 - **Icon:**
   - A circle whose colour is the chat's state.
   - It holds the chat's topic symbol: an SF Symbol in the state's colour, on a tint of that colour (default).
