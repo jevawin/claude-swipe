@@ -333,7 +333,7 @@ struct SettingsView: View {
     }
 
     let panes: [(name: String, icon: String)] = [
-        ("General", ""), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
+        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
     ]
 
     var body: some View {
@@ -367,6 +367,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(pane).font(.system(size: 18, weight: .semibold)).accessibilityAddTraits(.isHeader)
                     switch pane {
+                    case "Appearance": appearancePane
                     case "Cards": cards
                     case "Windows": windows
                     case "AI": ai
@@ -385,13 +386,6 @@ struct SettingsView: View {
     var general: some View {
         VStack(alignment: .leading, spacing: 14) {
         Group_ {
-            Row(title: "Theme") {
-                Picker("Theme", selection: $prefs.theme) {
-                    Text("Auto").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-            }
-            Hairline()
             Row(title: "Launch at login") {
                 Toggle("Launch at login", isOn: Binding(get: { prefs.loginOn }, set: { actions.setLogin($0) }))
                     .toggleStyle(.switch).labelsHidden()
@@ -403,6 +397,112 @@ struct SettingsView: View {
         }
         PrivacyNote(text: privacyLocal)
         }
+    }
+
+    // The four background values are greyed out while macOS forces the panel solid.
+    var appearancePane: some View {
+        let solid = prefs.systemSolid
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
+        return VStack(alignment: .leading, spacing: 14) {
+            if solid {
+                WarningBox(text: "Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls.")
+            }
+            Group_ {
+                Row(title: "Theme") {
+                    Picker("Theme", selection: $prefs.theme) {
+                        Text("Auto").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Hairline()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("Style").font(.system(size: 13, weight: .medium))
+                        if matchedPreset(prefs.appearance) == nil {
+                            Text("Custom").font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Capsule().fill(Theme.brand.opacity(0.15)))
+                                .foregroundStyle(Theme.brand)
+                        }
+                    }
+                    HStack(spacing: 14) {
+                        ForEach(StylePreset.allCases, id: \.self) { p in
+                            PictureTile(label: p.rawValue.capitalized, selected: matchedPreset(prefs.appearance) == p,
+                                        action: { prefs.appearance = p.values }) {
+                                MiniPanel(values: effective(p.values, solidRequired: false, glassAvailable: glassAvailable))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .disabled(solid).opacity(solid ? 0.5 : 1)
+                Hairline()
+                Row(title: "Opacity", helper: "How much of the panel colour sits behind your chats") {
+                    HStack(spacing: 8) {
+                        SliderPreview(values: { var v = prefs.appearance; v.opacity = $0; return v },
+                                      value: prefs.appearance.opacity, range: opacityFloor...100)
+                        Slider(value: $prefs.appearance.opacity, in: opacityFloor...100, step: 1).frame(width: 130)
+                        Text("\(Int(prefs.appearance.opacity))%").monospacedDigit()
+                            .foregroundStyle(Theme.secondary).frame(width: 38, alignment: .trailing)
+                    }
+                }
+                .disabled(solid).opacity(solid ? 0.5 : 1)
+                Hairline()
+                tiles("Blur", helper: "Softens what shows through the panel", BlurLevel.allCases,
+                      selected: prefs.appearance.blur, name: { $0.rawValue.capitalized },
+                      set: { prefs.appearance.blur = $0 },
+                      look: { var v = prefs.appearance; v.blur = $0; return v })
+                    .disabled(solid).opacity(solid ? 0.5 : 1)
+                if fadeSupported {
+                    Hairline()
+                    Row(title: "Edge fade", helper: "0 is a hard edge. Higher fades the panel in from further across.") {
+                        HStack(spacing: 8) {
+                            SliderPreview(values: { var v = prefs.appearance; v.fade = $0; return v },
+                                          value: prefs.appearance.fade, range: 0...100)
+                            Slider(value: $prefs.appearance.fade, in: 0...100, step: 1).frame(width: 130)
+                            Text("\(Int(prefs.appearance.fade))").monospacedDigit()
+                                .foregroundStyle(Theme.secondary).frame(width: 38, alignment: .trailing)
+                        }
+                    }
+                    .disabled(solid).opacity(solid ? 0.5 : 1)
+                }
+                Hairline()
+                tiles("Glass", helper: glassAvailable ? "Liquid Glass behind each group of chats" : "Needs macOS 26 or later",
+                      GlassStyle.allCases, selected: glassAvailable ? prefs.appearance.glass : .off,
+                      name: { $0.rawValue.capitalized }, set: { prefs.appearance.glass = $0 },
+                      look: { var v = prefs.appearance; v.glass = $0; return v })
+                    .disabled(solid || !glassAvailable).opacity(solid || !glassAvailable ? 0.5 : 1)
+                Hairline()
+                tiles("Density", helper: "Cozy shows each chat's summary. Compact fits more chats on one line each.",
+                      Density.allCases, selected: prefs.density, name: { $0.rawValue.capitalized },
+                      set: { prefs.density = $0 }, look: { _ in prefs.appearance }, density: { $0 })
+            }
+            HStack {
+                Spacer()
+                Button("Reset to defaults") { prefs.resetAppearance() }.disabled(isDefault)
+            }
+        }
+    }
+
+    // A row of picture tiles under a title, one per choice.
+    func tiles<T: Hashable>(_ title: String, helper: String, _ all: [T], selected: T, name: @escaping (T) -> String,
+                            set: @escaping (T) -> Void, look: @escaping (T) -> AppearanceValues,
+                            density: ((T) -> Density)? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .medium))
+                Text(helper).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+            }
+            HStack(spacing: 14) {
+                ForEach(all, id: \.self) { c in
+                    PictureTile(label: name(c), selected: selected == c, action: { set(c) }) {
+                        MiniPanel(values: look(c), density: density?(c) ?? prefs.density)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     var folders: [String] {
@@ -423,9 +523,9 @@ struct SettingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
             }
             Group_ {
-                Row(title: "Emoji from",
+                Row(title: "Topic icon from",
                     helper: "Claude picks these, so AI must be on. Right-click a chat to pick your own.") {
-                    Picker("Emoji from", selection: $prefs.iconSource) {
+                    Picker("Topic icon from", selection: $prefs.iconSource) {
                         Text("Chat subject").tag("subject"); Text("Folder").tag("folder")
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
@@ -480,8 +580,8 @@ struct SettingsView: View {
                     Toggle("Sort unclear chats", isOn: $prefs.aiSort).toggleStyle(.switch).labelsHidden()
                 }
                 Hairline()
-                Row(title: "Let AI pick emoji", helper: "Off: only your own emoji picks show") {
-                    Toggle("Let AI pick emoji", isOn: $prefs.aiIcon).toggleStyle(.switch).labelsHidden()
+                Row(title: "Pick a topic icon for each chat", helper: "Off: chats show their state icon, or your own pick") {
+                    Toggle("Pick a topic icon for each chat", isOn: $prefs.aiIcon).toggleStyle(.switch).labelsHidden()
                 }
                 Hairline()
                 Row(title: "Ready to clear section",
@@ -491,8 +591,8 @@ struct SettingsView: View {
             }
             .disabled(!ready)
             Group_ {
-                Row(title: "Re-pick all emoji",
-                    helper: "Changing the model or emoji source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay.") {
+                Row(title: "Re-pick all topic icons",
+                    helper: "Changing the model or icon source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay.") {
                     Button("Re-pick…") { actions.repick() }
                 }
             }
@@ -658,14 +758,14 @@ struct AIIntro: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sort unclear chats and pick emoji").font(.system(size: 15, weight: .semibold))
-            Text("Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.")
+            Text("Sort unclear chats and pick topic icons").font(.system(size: 15, weight: .semibold))
+            Text("Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick a topic icon for each chat.")
                 .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .top, spacing: 14) {
-                SortDemo(sorted: false, label: "Picture: a chat card marked unsure, with no emoji",
-                         caption: "Before: chat marked unsure, no emoji")
-                SortDemo(sorted: true, label: "Picture: the same card marked done, with an emoji",
-                         caption: "After: chat sorted, with an emoji")
+                SortDemo(sorted: false, label: "Picture: a chat marked unsure, with no topic icon",
+                         caption: "Before: chat marked unsure, no topic icon")
+                SortDemo(sorted: true, label: "Picture: the same chat marked done, with a topic icon",
+                         caption: "After: chat sorted, with a topic icon")
             }
             WarningBox(text: warning)
             PrivacyNote(text: "ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.")
@@ -675,7 +775,7 @@ struct AIIntro: View {
     }
 }
 
-// Before/after picture of one card: unsure and plain, then sorted with an emoji badge.
+// Before/after picture of one chat: unsure with its state icon, then sorted with a topic icon.
 struct SortDemo: View {
     let sorted: Bool
     let label: String
@@ -687,17 +787,7 @@ struct SortDemo: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(Theme.bg)
                 HStack(alignment: .top, spacing: 8) {
-                    RoundedRectangle(cornerRadius: 7).fill(st.color)
-                        .overlay(Image(systemName: st.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white))
-                        .overlay(alignment: .bottomTrailing) {
-                            if sorted {
-                                Circle().fill(Theme.cardHover).frame(width: 16, height: 16)
-                                    .overlay(Text("🧾").font(.system(size: 9)))
-                                    .overlay(Circle().stroke(Theme.card, lineWidth: 1.5))
-                                    .offset(x: 5, y: 5)
-                            }
-                        }
-                        .frame(width: 26, height: 26)
+                    StateIcon(symbol: sorted ? "banknote" : st.icon, color: st.color, size: 26)
                     VStack(alignment: .leading, spacing: 5) {
                         RoundedRectangle(cornerRadius: 2).fill(Theme.text.opacity(0.7)).frame(width: 70, height: 5)
                         RoundedRectangle(cornerRadius: 2).fill(Theme.border).frame(width: 46, height: 4)
@@ -768,5 +858,113 @@ struct Demo: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.card))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(highlight ? Theme.brand : Theme.border, lineWidth: highlight ? 1.5 : 1))
+    }
+}
+
+// MARK: - Appearance pane pieces
+
+// A mini desktop with a mini panel on its right, drawn in the given style. Used by
+// the picture tiles and the slider previews. A sketch, not the real material.
+struct MiniPanel: View {
+    let values: AppearanceValues
+    var density: Density = .cozy
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        GeometryReader { g in
+            let dark = scheme == .dark
+            let w = g.size.width, h = g.size.height
+            let pw = w * 0.5
+            ZStack(alignment: .topLeading) {
+                // Desktop: a light window over a darker wallpaper, so see-through shows.
+                LinearGradient(colors: [Color(nsColor: hsl(210, 40, 55)), Color(nsColor: hsl(262, 35, 45))],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(0..<4, id: \.self) { _ in Capsule().fill(Color.black.opacity(0.55)).frame(height: 2.5) }
+                }
+                .padding(5)
+                .frame(width: w * 0.7, height: h * 0.62, alignment: .topLeading)
+                .background(Color.white)
+                .offset(x: w * 0.12, y: h * 0.18)
+                .blur(radius: values.blur == .off ? 0 : values.blur == .light ? 1.2 : 2.6)
+                .mask(alignment: .trailing) { Rectangle().frame(width: pw).frame(maxWidth: .infinity, alignment: .trailing) }
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(0..<4, id: \.self) { _ in Capsule().fill(Color.black.opacity(0.55)).frame(height: 2.5) }
+                }
+                .padding(5)
+                .frame(width: w * 0.7, height: h * 0.62, alignment: .topLeading)
+                .background(Color.white)
+                .offset(x: w * 0.12, y: h * 0.18)
+                .mask(alignment: .leading) { Rectangle().frame(width: w - pw).frame(maxWidth: .infinity, alignment: .leading) }
+                // The panel: tint under the fade, then groups.
+                ZStack(alignment: .top) {
+                    let tint = Rectangle().fill((dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
+                        .opacity(values.opacity / 100))
+                    if values.fade > 0 { tint.mask(fadeGradient(values.fade)) } else { tint }
+                    VStack(spacing: density == .cozy ? 3 : 2) {
+                        ForEach(0..<(density == .cozy ? 3 : 5), id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill((dark ? Color(white: 0.19) : .white).opacity(values.glass == .clear ? 0.33 : 0.55))
+                                .overlay(RoundedRectangle(cornerRadius: 2).stroke(values.glass == .off ? .clear : .white.opacity(0.7), lineWidth: 0.5))
+                                .frame(height: density == .cozy ? 8 : 5)
+                        }
+                    }
+                    .padding(4)
+                }
+                .frame(width: pw, height: h)
+                .offset(x: w - pw)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+// An 84×54 picture with its name under it. The selected one gets a brand ring.
+struct PictureTile<Picture: View>: View {
+    let label: String
+    let selected: Bool
+    let action: () -> Void
+    @ViewBuilder let picture: () -> Picture
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                picture()
+                    .frame(width: 84, height: 54)
+                    .padding(2)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Theme.brand : .clear, lineWidth: 2))
+                Text(label).font(.system(size: 12, weight: selected ? .medium : .regular))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
+// A 64×42 preview showing the slider's current value. On hover it runs from min to
+// max and back, unless Reduce motion is on.
+struct SliderPreview: View {
+    let values: (Double) -> AppearanceValues
+    let value: Double
+    let range: ClosedRange<Double>
+    @LocalState private var hovering = false
+
+    var body: some View {
+        Group {
+            if hovering {
+                // A 2.4s loop: min, max, min.
+                TimelineView(.animation) { ctx in
+                    let t = (1 - cos(ctx.date.timeIntervalSinceReferenceDate * .pi / 1.2)) / 2
+                    MiniPanel(values: values(range.lowerBound + (range.upperBound - range.lowerBound) * t))
+                }
+            } else {
+                MiniPanel(values: values(value))
+            }
+        }
+        .frame(width: 64, height: 42)
+        .onHover { hovering = $0 && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     }
 }

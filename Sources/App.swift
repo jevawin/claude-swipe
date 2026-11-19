@@ -748,10 +748,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let n = folder ? Set(rows.map(\.folder)).count : rows.count
         let noun = folder ? (n == 1 ? "folder" : "folders") : (n == 1 ? "chat" : "chats")
         let alert = NSAlert()
-        alert.messageText = "Re-pick all emoji?"
+        alert.messageText = "Re-pick all topic icons?"
         alert.informativeText = folder
-            ? "ClaudeSwipe will ask \(p.modelName) to pick an emoji again for \(n) \(noun) with chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change."
-            : "ClaudeSwipe will ask \(p.modelName) to pick an emoji again for \(n) \(noun) from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change."
+            ? "ClaudeSwipe will ask \(p.modelName) to pick a topic icon again for \(n) \(noun) with chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change."
+            : "ClaudeSwipe will ask \(p.modelName) to pick a topic icon again for \(n) \(noun) from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change."
         alert.addButton(withTitle: "Re-pick")
         alert.addButton(withTitle: "Cancel")
         let go: (NSApplication.ModalResponse) -> Void = { [weak self] r in
