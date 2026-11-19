@@ -131,6 +131,11 @@ enum Theme {
     static let card = themed(.white, hsl(60, 2.1, 18.4))                    // --bg-000
     static let cardHover = themed(hsl(53, 28.6, 94.5), hsl(60, 2.1, 21))
     static let sidebar = themed(hsl(50, 25, 92), hsl(60, 2.5, 12.5))
+    // The redesigned panel's secondary text, brightened in dark to stay readable see-through.
+    static let panelSecondary = themed(NSColor(srgbRed: 0x57 / 255.0, green: 0x56 / 255.0, blue: 0x4F / 255.0, alpha: 1),
+                                       NSColor(srgbRed: 0xC4 / 255.0, green: 0xC2 / 255.0, blue: 0xBA / 255.0, alpha: 1))
+    // Group outlines and row dividers: 5% black in light, 6% white in dark.
+    static let hairline = themed(NSColor(white: 0, alpha: 0.05), NSColor(white: 1, alpha: 0.06))
 }
 
 // MARK: - Views
@@ -176,6 +181,7 @@ struct PanelView: View {
     let openSettings: () -> Void
     @ObservedObject private var prefs = Prefs.shared
     @FocusState private var searchFocused: Bool
+    @LocalState private var hovered: String? = nil
 
     // Every word must appear somewhere in title, folder or preview.
     var filtered: [Chat] {
@@ -187,37 +193,45 @@ struct PanelView: View {
         }
     }
 
+    // What Return opens: the first match in section order.
+    var firstMatch: Chat? { sections.flatMap { s in filtered.filter { $0.section == s.key } }.first }
+
+    // What the panel draws: the saved values, forced solid by Reduce transparency.
+    var look: AppearanceValues {
+        effective(prefs.appearance, solidRequired: prefs.systemSolid, glassAvailable: glassAvailable)
+    }
+
+    // Search as the title: a 40pt pill with Refresh and Settings inside.
+    var searchPill: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(Theme.panelSecondary)
+                .accessibilityHidden(true)
+            TextField("Search Claude chats", text: $store.query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .medium))
+                .focused($searchFocused)
+                .onSubmit { if let first = firstMatch { open(first) } }
+            if store.updating { ProgressView().controlSize(.small) }
+            Button { store.refresh() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 13)) }
+                .buttonStyle(.borderless)
+                .help("Refresh")
+                .accessibilityLabel("Refresh")
+            Button { openSettings() } label: { Settings2Image() }
+                .buttonStyle(.borderless)
+                .help("Settings")
+                .accessibilityLabel("Settings")
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .background(GroupBackground(glass: look.glass, blur: look.blur))
+        .onChange(of: store.focusTick) { searchFocused = true }
+        .onAppear { searchFocused = true }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Claude chats").font(.system(size: 16, weight: .semibold))
-                Spacer()
-                if store.updating { ProgressView().controlSize(.small) }
-                Button { store.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless)
-                    .help("Refresh")
-                    .accessibilityLabel("Refresh")
-                Button { openSettings() } label: { Settings2Image() }
-                    .buttonStyle(.borderless)
-                    .help("Settings")
-                    .accessibilityLabel("Settings")
-            }
-            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
-                TextField("Search chats or folders", text: $store.query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .focused($searchFocused)
-                    .onSubmit { if let first = sections.flatMap({ s in filtered.filter { $0.section == s.key } }).first { open(first) } }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
-            .padding(.horizontal, 12).padding(.bottom, 10)
-            .onChange(of: store.focusTick) { searchFocused = true }
-            .onAppear { searchFocused = true }
-            Rectangle().fill(Theme.border).frame(height: 1)
+            searchPill.padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
             if let n = store.notice {
                 Text(n).font(.system(size: 13)).padding(.horizontal, 16).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -227,38 +241,13 @@ struct PanelView: View {
                 Text(e).font(.system(size: 13)).foregroundStyle(.red).padding(16)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(sections, id: \.key) { sec in
                         let items = filtered.filter { $0.section == sec.key }
-                        if !items.isEmpty {
-                            let collapsible = sec.key == "done"
-                            HStack(spacing: 4) {
-                                Text("\(sec.label) · \(items.count)")
-                                if collapsible {
-                                    Image(systemName: prefs.showDone ? "chevron.down" : "chevron.right")
-                                        .font(.system(size: 10, weight: .semibold))
-                                }
-                            }
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.secondary)
-                            .padding(.horizontal, 2).padding(.top, 8)
-                            .contentShape(Rectangle())
-                            .onTapGesture { if collapsible { prefs.showDone.toggle() } }
-                            if !collapsible || prefs.showDone || !store.query.isEmpty {
-                                ForEach(items) { c in
-                                    Card(chat: c)
-                                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
-                                        .onTapGesture { open(c) }
-                                        .contextMenu {
-                                            Button("Change topic icon…") { editIcon(c) }
-                                        }
-                                }
-                            }
-                        }
+                        if !items.isEmpty { section(sec, items) }
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 12)
-                .background(GroupBackground(glass: look.glass, blur: look.blur))  // placeholder until the restyle
             }
         }
         .foregroundStyle(Theme.text)
@@ -268,62 +257,132 @@ struct PanelView: View {
         })
     }
 
-    // What the panel draws: the saved values, forced solid by Reduce transparency.
-    var look: AppearanceValues {
-        effective(prefs.appearance, solidRequired: prefs.systemSolid, glassAvailable: glassAvailable)
+    @ViewBuilder func section(_ sec: (key: String, label: String), _ items: [Chat]) -> some View {
+        let collapsible = sec.key == "done"
+        let open_ = !collapsible || prefs.showDone || !store.query.isEmpty
+        HStack(spacing: 0) {
+            Text(sec.label).font(.system(size: 12.5, weight: .semibold))
+            Text(" \(items.count)").font(.system(size: 12.5)).opacity(0.8)
+            Spacer()
+            // Only Done collapses for now; the others always show open.
+            Image(systemName: open_ ? "chevron.down" : "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .accessibilityHidden(true)
+        }
+        .foregroundStyle(Theme.text)
+        .modifier(HeaderGlow(on: look.fade > 0))
+        .padding(.horizontal, 4).padding(.top, 12).padding(.bottom, 2)
+        .contentShape(Rectangle())
+        .onTapGesture { if collapsible { prefs.showDone.toggle() } }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        if open_ {
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, c in
+                    ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
+                            density: prefs.density, divider: i > 0)
+                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
+                        .contentShape(Rectangle())
+                        .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
+                        .onTapGesture { open(c) }
+                        .contextMenu { Button("Change topic icon…") { editIcon(c) } }
+                }
+            }
+            .background(GroupBackground(glass: look.glass, blur: look.blur))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
     }
 }
 
-// Notification-style card: icon tile, title with time top right, folder chip, preview.
-struct Card: View {
-    let chat: Chat
-    @ObservedObject var prefs = Prefs.shared
-    @LocalState private var hover = false
+// Over the edge fade, section headers get a soft glow in the panel colour to stay readable.
+struct HeaderGlow: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.shadow(color: Theme.bg.opacity(0.95), radius: 6).shadow(color: Theme.bg.opacity(0.8), radius: 12)
+        } else {
+            content
+        }
+    }
+}
 
-    // Settings › Cards › Card icon. "status": status tile with the emoji as a badge
-    // (no emoji, no badge). "emoji": emoji tile (💬 if none) with the status as a badge.
-    @ViewBuilder var tile: some View {
+// A circle in the state's colour (a tint of it), holding the topic symbol in that colour.
+struct StateIcon: View {
+    let symbol: String
+    let color: Color
+    let size: CGFloat
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Circle().fill(color.opacity(scheme == .dark ? 0.18 : 0.14))
+            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(color))
+            .frame(width: size, height: size)
+    }
+}
+
+// One chat in a section group. Cozy: icon, title over summary, age over folder.
+// Compact: one line, with the summary only on the selected row.
+struct ChatRow: View {
+    let chat: Chat
+    let selected: Bool
+    let density: Density
+    let divider: Bool
+    @ObservedObject var prefs = Prefs.shared
+
+    var folder: String? { chat.folder != prefs.homeFolder ? chat.folder : nil }
+
+    var icon: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
-            RoundedRectangle(cornerRadius: 9).fill(st.color)
-                .overlay(Image(systemName: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist))
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
+        return StateIcon(symbol: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist),
+                         color: st.color, size: density == .cozy ? 32 : 24)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+    }
+
+    var summary: some View {
+        Text(chat.why).font(.system(size: 12.5)).foregroundStyle(Theme.panelSecondary).lineLimit(2)
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            tile
-                .frame(width: 34, height: 34)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(statusName[chat.status] ?? "Unsure")
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
-                    Spacer(minLength: 6)
-                    Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
+        Group {
+            if density == .cozy {
+                HStack(alignment: .center, spacing: 12) {
+                    icon
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        if !chat.why.isEmpty { summary }
+                    }
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(ageText(chat.engaged))
+                        if let f = folder { Text(f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing) }
+                    }
+                    .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
                 }
-                HStack(spacing: 6) {
-                    if chat.folder != prefs.homeFolder {
-                        Text(chat.folder)
-                            .font(.system(size: 12, design: .monospaced))
-                            .lineLimit(1).truncationMode(.middle)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
+                .padding(.vertical, 13)
+            } else {
+                HStack(alignment: .center, spacing: 10) {
+                    icon
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Group {
+                                if let f = folder { Text(f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing) }
+                                Text(ageText(chat.engaged))
+                            }
+                            .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
+                        }
+                        if selected && !chat.why.isEmpty { summary }
                     }
                 }
-                .padding(.top, 4)
-                if !chat.why.isEmpty {
-                    Text(chat.why).font(.system(size: 13)).foregroundStyle(Theme.text.opacity(0.85))
-                        .lineLimit(2).padding(.top, 7)
-                }
+                .padding(.vertical, 8)
             }
         }
-        .padding(10)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(hover ? Theme.cardHover : Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 14))
-        .onHover { hover = $0 }
+        .background(selected ? Theme.text.opacity(0.06) : .clear)
+        .overlay(alignment: .top) { if divider { Rectangle().fill(Theme.hairline).frame(height: 1) } }
     }
 }
 

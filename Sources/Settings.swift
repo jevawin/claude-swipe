@@ -415,7 +415,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
-                Card(chat: sampleChat)
+                ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false)
+                    .background(GroupBackground(glass: .off, blur: .off))
                     .frame(maxWidth: 440)
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.bg))
