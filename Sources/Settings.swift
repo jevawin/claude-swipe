@@ -37,6 +37,8 @@ final class Prefs: ObservableObject {
     @Published var aiSort: Bool { didSet { d.set(aiSort, forKey: "aiSort"); scriptChanged() } }
     @Published var aiIcon: Bool { didSet { d.set(aiIcon, forKey: "aiIcon"); scriptChanged() } }
     @Published var aiClear: Bool { didSet { d.set(aiClear, forKey: "aiClear"); scriptChanged() } }
+    // Reduce transparency or Increase contrast is on: the panel draws solid. Wired to macOS in the live panel change.
+    @Published var systemSolid = false
     @Published var loginOn = false  // mirrors SMAppService; set by AppDelegate.updateLoginItem
 
     var onboarded: Bool {

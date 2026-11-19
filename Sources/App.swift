@@ -249,12 +249,19 @@ struct PanelView: View {
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 12)
+                .background(GroupBackground(glass: look.glass, blur: look.blur))  // placeholder until the restyle
             }
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.bg)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
+        .background(ZStack {
+            PanelMaterial(blur: look.blur, fade: look.fade)
+            PanelTint(opacity: look.opacity, fade: look.fade)
+        })
+    }
+
+    // What the panel draws: the saved values, forced solid by Reduce transparency.
+    var look: AppearanceValues {
+        effective(prefs.appearance, solidRequired: prefs.systemSolid, glassAvailable: glassAvailable)
     }
 }
 
@@ -354,10 +361,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false  // flush to the edge; with the fade on there is no edge to shadow
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
-        // Solid background comes from PanelView (Theme.bg), so the window itself stays clear.
+        // The see-through background comes from PanelView (PanelBackground.swift), so the window stays clear.
         panel.contentView = NSHostingView(rootView: PanelView(
             store: store, open: { [weak self] in self?.open($0) },
             editEmoji: { [weak self] in self?.editEmoji($0) },
@@ -474,7 +481,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func show(on screen: NSScreen) {
         let vf = screen.visibleFrame
-        let target = NSRect(x: vf.maxX - width - 8, y: vf.minY + 8, width: width, height: vf.height - 16)
+        let target = NSRect(x: vf.maxX - width, y: vf.minY, width: width, height: vf.height)
         panelTarget = target
         debugLog("show")
         panel.setFrame(target.offsetBy(dx: width + 20, dy: 0), display: false)
