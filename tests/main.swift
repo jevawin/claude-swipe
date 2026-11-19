@@ -8,20 +8,18 @@ func check(_ name: String, _ cond: Bool) {
     if !cond { failures += 1 }
 }
 
-check("presetsMatchSpec",
-  StylePreset.solid.values == AppearanceValues(opacity: 100, blur: .off, fade: 0, glass: .off) &&
-  StylePreset.frosted.values == AppearanceValues(opacity: 66, blur: .light, fade: 40, glass: .regular) &&
-  StylePreset.clear.values == AppearanceValues(opacity: opacityFloor, blur: .heavy, fade: 70, glass: .clear))
-check("defaultIsFrosted", matchedPreset(defaultAppearance) == .frosted)
-check("customWhenTouched", matchedPreset(AppearanceValues(opacity: 67, blur: .light, fade: 40, glass: .regular)) == nil)
-check("clampedToFloor", clampedToFloor(AppearanceValues(opacity: -20, blur: .light, fade: 140, glass: .off)).opacity == opacityFloor
-  && clampedToFloor(AppearanceValues(opacity: -20, blur: .light, fade: 140, glass: .off)).fade == 100)
-let custom = AppearanceValues(opacity: 70, blur: .heavy, fade: 55, glass: .clear)
-check("effectiveSolidKeepsInput", effective(custom, solidRequired: true, glassAvailable: true)
-  == AppearanceValues(opacity: 100, blur: .off, fade: 0, glass: .off) && custom.opacity == 70)
-check("glassOffBelow26", effective(custom, solidRequired: false, glassAvailable: false).glass == .off)
-check("fadeZeroNoStops", fadeStops(0).isEmpty)
-check("fadeStops40", fadeStops(40).map(\.location) == [0, 0.2, 0.4] && fadeStops(40).map(\.alpha) == [0, 0.5, 1])
+check("defaultIsFrosted66", defaultAppearance == AppearanceValues(background: .frosted, opacity: 66))
+check("clampedToFloor", clampedToFloor(AppearanceValues(background: .frosted, opacity: -20)).opacity == opacityFloor
+  && clampedToFloor(AppearanceValues(background: .frosted, opacity: 140)).opacity == 100)
+let custom = AppearanceValues(background: .glass, opacity: 30)
+check("effectiveSolidRequired", effective(custom, solidRequired: true, glassAvailable: true)
+  == AppearanceValues(background: .solid, opacity: 100))
+check("effectiveSolidIsOpaque", effective(AppearanceValues(background: .solid, opacity: 20), solidRequired: false, glassAvailable: true).opacity == 100)
+check("glassFallsBackToFrostedBelow26", effective(custom, solidRequired: false, glassAvailable: false)
+  == AppearanceValues(background: .frosted, opacity: 30))
+check("effectiveKeepsGlass", effective(custom, solidRequired: false, glassAvailable: true) == custom)
+check("groupFillFollowsOpacity", groupFillAlpha(opacity: 100, background: .frosted) == 0.55
+  && groupFillAlpha(opacity: 0, background: .frosted) == 0 && groupFillAlpha(opacity: 50, background: .glass) == 0.16)
 let vis = CGRect(x: 0, y: 0, width: 1512, height: 944)
 let panel = CGRect(x: 1072, y: 0, width: 440, height: 944)
 check("settingsOriginCentredWhenClear", settingsOrigin(window: CGSize(width: 600, height: 580), panel: panel, visible: vis).x == 456)

@@ -224,7 +224,7 @@ struct PanelView: View {
         .foregroundStyle(Theme.text)
         .padding(.horizontal, 12)
         .frame(height: 40)
-        .background(GroupBackground(glass: look.glass, blur: look.blur))
+        .background(GroupBackground(look: look))
         .onChange(of: store.focusTick) { searchFocused = true }
         .onAppear { searchFocused = true }
     }
@@ -252,8 +252,8 @@ struct PanelView: View {
         }
         .foregroundStyle(Theme.text)
         .background(ZStack {
-            PanelMaterial(blur: look.blur, fade: look.fade)
-            PanelTint(opacity: look.opacity, fade: look.fade)
+            PanelMaterial(visible: look.background == .frosted)
+            PanelTint(opacity: look.opacity)
         })
     }
 
@@ -272,7 +272,7 @@ struct PanelView: View {
             }
         }
         .foregroundStyle(Theme.text)
-        .modifier(HeaderGlow(on: look.fade > 0))
+        .modifier(HeaderGlow(on: look.opacity < 100))
         .padding(.horizontal, 4).padding(.top, 12).padding(.bottom, 2)
         .contentShape(Rectangle())
         .onTapGesture { if collapsible { prefs.showDone.toggle() } }
@@ -290,13 +290,13 @@ struct PanelView: View {
                         .contextMenu { Button("Change topic icon…") { editIcon(c) } }
                 }
             }
-            .background(GroupBackground(glass: look.glass, blur: look.blur))
+            .background(GroupBackground(look: look))
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 }
 
-// Over the edge fade, section headers get a soft glow in the panel colour to stay readable.
+// When the panel is see-through, section headers get a soft glow in the panel colour to stay readable.
 struct HeaderGlow: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
@@ -421,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false  // flush to the edge; with the fade on there is no edge to shadow
+        panel.hasShadow = false  // flush to the edge, no shadow on the left
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
         // The see-through background comes from PanelView (PanelBackground.swift), so the window stays clear.

@@ -41,14 +41,11 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 
 ## Settings › Appearance
 - Theme: Auto / Light / Dark
-- Style: Solid / Frosted / Clear (picture tiles). Shows a "Custom" tag when the values match none.
-- Opacity / How much of the panel colour sits behind your chats
-- Blur: Off / Light / Heavy. Helper: Softens what shows through the panel
-- Edge fade / 0 is a hard edge. Higher fades the panel in from further across.
-- Glass: Off / Regular / Clear. Helper: Liquid Glass behind each group of chats (below macOS 26: Needs macOS 26 or later)
+- Background: Solid / Frosted / Glass (picture tiles). Helper: Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass. (below macOS 26: Frosted blurs what's behind. Glass needs macOS 26 or later.)
+- See-through / How much of what's behind shows through your chats. Higher is harder to read over busy windows.
 - Density: Cozy / Compact. Helper: Cozy shows each chat's summary. Compact fits more chats on one line each.
 - Button: Reset to defaults
-- When macOS forces a solid panel: Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls.
+- When macOS forces a solid panel: Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls. (Increase contrast gets the same line with its own name.)
 
 ## Settings › Cards
 - Preview

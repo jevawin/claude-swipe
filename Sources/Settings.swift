@@ -19,8 +19,7 @@ final class Prefs: ObservableObject {
     // The panel's see-through values, one set for both themes. Loaded through clampedToFloor.
     @Published var appearance: AppearanceValues {
         didSet {
-            d.set(appearance.opacity, forKey: "panelOpacity"); d.set(appearance.blur.rawValue, forKey: "panelBlur")
-            d.set(appearance.fade, forKey: "panelFade"); d.set(appearance.glass.rawValue, forKey: "panelGlass")
+            d.set(appearance.opacity, forKey: "panelOpacity"); d.set(appearance.background.rawValue, forKey: "panelBackground")
         }
     }
     @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
@@ -51,18 +50,15 @@ final class Prefs: ObservableObject {
         migrateIconPrefs(d)
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
-            "panelOpacity": defaultAppearance.opacity, "panelBlur": defaultAppearance.blur.rawValue,
-            "panelFade": defaultAppearance.fade, "panelGlass": defaultAppearance.glass.rawValue,
+            "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
             "density": Density.cozy.rawValue,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
         appearance = clampedToFloor(AppearanceValues(
-            opacity: d.double(forKey: "panelOpacity"),
-            blur: BlurLevel(rawValue: d.string(forKey: "panelBlur") ?? "") ?? defaultAppearance.blur,
-            fade: d.double(forKey: "panelFade"),
-            glass: GlassStyle(rawValue: d.string(forKey: "panelGlass") ?? "") ?? defaultAppearance.glass))
+            background: BackgroundStyle(rawValue: d.string(forKey: "panelBackground") ?? "") ?? defaultAppearance.background,
+            opacity: d.double(forKey: "panelOpacity")))
         density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
@@ -411,6 +407,7 @@ struct SettingsView: View {
     // The four background values are greyed out while macOS forces the panel solid.
     var appearancePane: some View {
         let solid = prefs.systemSolid
+        let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
         let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
@@ -425,68 +422,32 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
+            }
+            Group_ {
+                tiles("Background", helper: glassAvailable ? "Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass."
+                                                           : "Frosted blurs what's behind. Glass needs macOS 26 or later.",
+                      BackgroundStyle.allCases, selected: look.background, name: { $0.rawValue.capitalized },
+                      set: { prefs.appearance.background = $0 },
+                      look: { var v = prefs.appearance; v.background = $0; return effective(v, solidRequired: false, glassAvailable: true) },
+                      disabled: { $0 == .glass && !glassAvailable })
+                    .disabled(solid).opacity(solid ? 0.5 : 1)
                 Hairline()
-                VStack(alignment: .leading, spacing: 10) {
+                Row(title: "See-through", helper: "How much of what's behind shows through your chats. Higher is harder to read over busy windows.") {
                     HStack(spacing: 8) {
-                        Text("Style").font(.system(size: 13, weight: .medium))
-                        if matchedPreset(prefs.appearance) == nil {
-                            Text("Custom").font(.system(size: 11, weight: .medium))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Capsule().fill(Theme.brand.opacity(0.15)))
-                                .foregroundStyle(Theme.brand)
-                        }
-                    }
-                    HStack(spacing: 14) {
-                        ForEach(StylePreset.allCases, id: \.self) { p in
-                            PictureTile(label: p.rawValue.capitalized, selected: matchedPreset(prefs.appearance) == p,
-                                        action: { prefs.appearance = p.values }) {
-                                MiniPanel(values: effective(p.values, solidRequired: false, glassAvailable: glassAvailable))
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 14).padding(.vertical, 11)
-                .disabled(solid).opacity(solid ? 0.5 : 1)
-                Hairline()
-                Row(title: "Opacity", helper: "How much of the panel colour sits behind your chats") {
-                    HStack(spacing: 8) {
-                        SliderPreview(values: { var v = prefs.appearance; v.opacity = $0; return v },
-                                      value: prefs.appearance.opacity, range: opacityFloor...100)
-                        Slider(value: $prefs.appearance.opacity, in: opacityFloor...100, step: 1).frame(width: 130)
-                        Text("\(Int(prefs.appearance.opacity))%").monospacedDigit()
+                        SliderPreview(values: { var v = prefs.appearance; v.opacity = 100 - $0; return v },
+                                      value: 100 - prefs.appearance.opacity, range: 0...(100 - opacityFloor))
+                        Slider(value: Binding(get: { 100 - prefs.appearance.opacity }, set: { prefs.appearance.opacity = 100 - $0 }),
+                               in: 0...(100 - opacityFloor), step: 1).frame(width: 130)
+                        Text("\(Int(100 - prefs.appearance.opacity))%").monospacedDigit()
                             .foregroundStyle(Theme.secondary).frame(width: 38, alignment: .trailing)
                     }
                 }
-                .disabled(solid).opacity(solid ? 0.5 : 1)
-                Hairline()
-                tiles("Blur", helper: "Softens what shows through the panel", BlurLevel.allCases,
-                      selected: prefs.appearance.blur, name: { $0.rawValue.capitalized },
-                      set: { prefs.appearance.blur = $0 },
-                      look: { var v = prefs.appearance; v.blur = $0; return v })
-                    .disabled(solid).opacity(solid ? 0.5 : 1)
-                if fadeSupported {
-                    Hairline()
-                    Row(title: "Edge fade", helper: "0 is a hard edge. Higher fades the panel in from further across.") {
-                        HStack(spacing: 8) {
-                            SliderPreview(values: { var v = prefs.appearance; v.fade = $0; return v },
-                                          value: prefs.appearance.fade, range: 0...100)
-                            Slider(value: $prefs.appearance.fade, in: 0...100, step: 1).frame(width: 130)
-                            Text("\(Int(prefs.appearance.fade))").monospacedDigit()
-                                .foregroundStyle(Theme.secondary).frame(width: 38, alignment: .trailing)
-                        }
-                    }
-                    .disabled(solid).opacity(solid ? 0.5 : 1)
-                }
-                Hairline()
-                tiles("Glass", helper: glassAvailable ? "Liquid Glass behind each group of chats" : "Needs macOS 26 or later",
-                      GlassStyle.allCases, selected: glassAvailable ? prefs.appearance.glass : .off,
-                      name: { $0.rawValue.capitalized }, set: { prefs.appearance.glass = $0 },
-                      look: { var v = prefs.appearance; v.glass = $0; return v })
-                    .disabled(solid || !glassAvailable).opacity(solid || !glassAvailable ? 0.5 : 1)
-                Hairline()
+                .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
+            }
+            Group_ {
                 tiles("Density", helper: "Cozy shows each chat's summary. Compact fits more chats on one line each.",
                       Density.allCases, selected: prefs.density, name: { $0.rawValue.capitalized },
-                      set: { prefs.density = $0 }, look: { _ in prefs.appearance }, density: { $0 })
+                      set: { prefs.density = $0 }, look: { _ in look }, density: { $0 })
             }
             HStack {
                 Spacer()
@@ -498,7 +459,7 @@ struct SettingsView: View {
     // A row of picture tiles under a title, one per choice.
     func tiles<T: Hashable>(_ title: String, helper: String, _ all: [T], selected: T, name: @escaping (T) -> String,
                             set: @escaping (T) -> Void, look: @escaping (T) -> AppearanceValues,
-                            density: ((T) -> Density)? = nil) -> some View {
+                            density: ((T) -> Density)? = nil, disabled: @escaping (T) -> Bool = { _ in false }) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 13, weight: .medium))
@@ -509,6 +470,7 @@ struct SettingsView: View {
                     PictureTile(label: name(c), selected: selected == c, action: { set(c) }) {
                         MiniPanel(values: look(c), density: density?(c) ?? prefs.density)
                     }
+                    .disabled(disabled(c)).opacity(disabled(c) ? 0.5 : 1)
                 }
             }
         }
@@ -527,7 +489,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
                 ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false)
-                    .background(GroupBackground(glass: .off, blur: .off))
+                    .background(GroupBackground(look: AppearanceValues(background: .solid, opacity: 100)))
                     .frame(maxWidth: 440)
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.bg))
@@ -886,43 +848,44 @@ struct MiniPanel: View {
             let dark = scheme == .dark
             let w = g.size.width, h = g.size.height
             let pw = w * 0.5
+            let window = VStack(alignment: .leading, spacing: 3) {
+                ForEach(0..<4, id: \.self) { _ in Capsule().fill(Color.black.opacity(0.55)).frame(height: 2.5) }
+            }
+            .padding(5)
+            .frame(width: w * 0.7, height: h * 0.62, alignment: .topLeading)
+            .background(Color.white)
+            .offset(x: w * 0.12, y: h * 0.18)
             ZStack(alignment: .topLeading) {
                 // Desktop: a light window over a darker wallpaper, so see-through shows.
                 LinearGradient(colors: [Color(nsColor: hsl(210, 40, 55)), Color(nsColor: hsl(262, 35, 45))],
                                startPoint: .topLeading, endPoint: .bottomTrailing)
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(0..<4, id: \.self) { _ in Capsule().fill(Color.black.opacity(0.55)).frame(height: 2.5) }
-                }
-                .padding(5)
-                .frame(width: w * 0.7, height: h * 0.62, alignment: .topLeading)
-                .background(Color.white)
-                .offset(x: w * 0.12, y: h * 0.18)
-                .blur(radius: values.blur == .off ? 0 : values.blur == .light ? 1.2 : 2.6)
-                .mask(alignment: .trailing) { Rectangle().frame(width: pw).frame(maxWidth: .infinity, alignment: .trailing) }
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(0..<4, id: \.self) { _ in Capsule().fill(Color.black.opacity(0.55)).frame(height: 2.5) }
-                }
-                .padding(5)
-                .frame(width: w * 0.7, height: h * 0.62, alignment: .topLeading)
-                .background(Color.white)
-                .offset(x: w * 0.12, y: h * 0.18)
-                .mask(alignment: .leading) { Rectangle().frame(width: w - pw).frame(maxWidth: .infinity, alignment: .leading) }
-                // The panel: tint under the fade, then groups.
+                window
+                // The panel: Frosted blurs everything behind it; Glass blurs only behind groups.
                 ZStack(alignment: .top) {
-                    let tint = Rectangle().fill((dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
+                    if values.background == .frosted {
+                        ZStack(alignment: .topLeading) {
+                            LinearGradient(colors: [Color(nsColor: hsl(210, 40, 55)), Color(nsColor: hsl(262, 35, 45))],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                            window.offset(x: -(w - pw))
+                        }
+                        .blur(radius: 3)
+                        .clipped()
+                    }
+                    Rectangle().fill((dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
                         .opacity(values.opacity / 100))
-                    if values.fade > 0 { tint.mask(fadeGradient(values.fade)) } else { tint }
                     VStack(spacing: density == .cozy ? 3 : 2) {
                         ForEach(0..<(density == .cozy ? 3 : 5), id: \.self) { _ in
                             RoundedRectangle(cornerRadius: 2)
-                                .fill((dark ? Color(white: 0.19) : .white).opacity(values.glass == .clear ? 0.33 : 0.55))
-                                .overlay(RoundedRectangle(cornerRadius: 2).stroke(values.glass == .off ? .clear : .white.opacity(0.7), lineWidth: 0.5))
+                                .fill(values.background == .glass ? (dark ? Color(white: 0.35) : Color(white: 0.92)).opacity(0.85)
+                                      : (dark ? Color(white: 0.19) : .white).opacity(groupFillAlpha(opacity: values.opacity, background: values.background)))
+                                .overlay(RoundedRectangle(cornerRadius: 2).stroke(values.background == .glass ? .white.opacity(0.8) : .clear, lineWidth: 0.5))
                                 .frame(height: density == .cozy ? 8 : 5)
                         }
                     }
                     .padding(4)
                 }
                 .frame(width: pw, height: h)
+                .clipped()
                 .offset(x: w - pw)
             }
         }

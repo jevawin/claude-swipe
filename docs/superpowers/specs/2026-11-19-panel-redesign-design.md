@@ -2,6 +2,23 @@
 
 Mockups: https://claude.ai/artifact/CQqaokmZuA3SRLnUiANUAg. The boards that count are "E · Quieter" (EDark, ELight), "E2 · Gradient fade" and "Settings · Appearance". The A to D rows are history.
 
+## Amendment after the first build (19 Nov 2026, Jamie)
+
+This replaces the Blur, Edge fade, Glass and Style rows below. Where they conflict, this wins.
+
+- Measured in a test harness over a text backdrop on macOS 27: every public `NSVisualEffectView` material, and both `NSGlassEffectView` styles, blur text away completely. They differ only in tint. So "Light" and "Heavy" blur can't look different, and Glass Regular and Clear barely do. Fading a material's alpha gives sharp text behind a wash, not a lighter blur.
+- Jamie tried the first build: Blur and Glass "do nothing" (they read as a solid panel under the 60% tint), and the four see-through controls were too many to get right. A design review (Fable) recommended the set below.
+- **Appearance pane is now:**
+  - Theme.
+  - **Background**: Solid, Frosted or Glass tiles. Solid has no blur and is opaque. Frosted is one behind-window material (`.sidebar`) across the panel. Glass (macOS 26+) puts each group and the search pill on Liquid Glass (Regular), with no panel material. Below 26 the Glass tile is disabled and a saved Glass shows as Frosted.
+  - **See-through**: one slider, 0 to 100 − floor. It sets panel tint and group fill together (group fill = 55% × opacity, 32% × opacity on Glass). Disabled for Solid.
+  - **Density**: its own group.
+  - Reset to defaults: Frosted, See-through 34% (opacity 66), Cozy, Auto theme.
+- **Cut:** Edge fade, the Blur choice, Glass Regular/Clear, Style presets and the Custom tag.
+- **Opacity floor** is 0 while Jamie tests; he sets the real one (the white-window contrast rule still applies).
+- **Known, unresolved:** with Glass, the gaps between groups show what's behind unblurred, so section headers rely on the glow. At high See-through over a busy light window they're hard to read.
+- Section headers get the glow whenever the panel isn't opaque. Only Done has a chevron.
+
 ## Why
 
 The panel was never designed. It feels busy, soft and unfinished: cards with borders, emoji tiles, a separate title and search box, and a floating box that stops short of the screen edge. Jamie wants it cleaner and more Claude-like, and wants a glass sidebar inspired by Monocle that touches the screen edge. Monocle gets too clear to read on light backgrounds, so ours must stay readable by default, and each person can tune how see-through it is.
