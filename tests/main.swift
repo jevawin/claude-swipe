@@ -50,5 +50,9 @@ check("hideBlockedWhileSettingsOpen", !panelMayHide(settingsOpen: true, explicit
 check("explicitHideWhileSettingsOpen", panelMayHide(settingsOpen: true, explicit: true))
 check("hideWhenSettingsClosed", panelMayHide(settingsOpen: false, explicit: false))
 
+check("shortFolderLast", shortFolder("clients/funky-pigeon") == "funky-pigeon" && shortFolder("clients") == "clients")
+check("shortFolderHome", shortFolder("~/Developer") == "Developer" && shortFolder("~") == "~")
+check("shortFolderWorktree", shortFolder("personal/claude-swipe @claude/panel-redesign") == "claude-swipe @claude/panel-redesign")
+check("shortFolderSpecial", shortFolder("(no folder)") == "(no folder)" && shortFolder("?") == "?")
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

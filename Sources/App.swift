@@ -359,7 +359,7 @@ struct ChatRow: View {
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(ageText(chat.engaged))
-                        if let f = folder { Text(f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing) }
+                        if let f = folder { Text(shortFolder(f)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                     }
                     .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
                 }
@@ -372,7 +372,7 @@ struct ChatRow: View {
                             Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                             Spacer(minLength: 8)
                             Group {
-                                if let f = folder { Text(f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing) }
+                                if let f = folder { Text(shortFolder(f)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                                 Text(ageText(chat.engaged))
                             }
                             .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)

@@ -95,3 +95,14 @@ func topicSymbol(_ icon: String?, status: String, allow: Set<String>) -> String 
 func panelMayHide(settingsOpen: Bool, explicit: Bool) -> Bool {
     !settingsOpen || explicit
 }
+
+// What a row shows for a folder label: only its last folder ("clients/funky-pigeon"
+// shows "funky-pigeon", "~/Developer" shows "Developer"). A worktree keeps its branch
+// ("claude-swipe @main"). The full label stays the key for icons, search and Settings.
+func shortFolder(_ label: String) -> String {
+    let parts = label.components(separatedBy: " @")
+    let path = parts[0]
+    let last = path.split(separator: "/").last.map(String.init) ?? path
+    let short = last.isEmpty ? path : last
+    return parts.count > 1 ? short + " @" + parts.dropFirst().joined(separator: " @") : short
+}
