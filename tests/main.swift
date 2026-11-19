@@ -50,9 +50,13 @@ check("hideBlockedWhileSettingsOpen", !panelMayHide(settingsOpen: true, explicit
 check("explicitHideWhileSettingsOpen", panelMayHide(settingsOpen: true, explicit: true))
 check("hideWhenSettingsClosed", panelMayHide(settingsOpen: false, explicit: false))
 
-check("shortFolderLast", shortFolder("clients/funky-pigeon") == "funky-pigeon" && shortFolder("clients") == "clients")
-check("shortFolderHome", shortFolder("~/Developer") == "Developer" && shortFolder("~") == "~")
-check("shortFolderWorktree", shortFolder("personal/claude-swipe @claude/panel-redesign") == "claude-swipe @claude/panel-redesign")
-check("shortFolderSpecial", shortFolder("(no folder)") == "(no folder)" && shortFolder("?") == "?")
+let one = shortFolders(["clients/funky-pigeon", "~", "(no folder)", "?", "personal/claude-swipe @claude/panel-redesign"])
+check("shortFoldersSingles", one["clients/funky-pigeon"] == "funky-pigeon" && one["~"] == "~" && one["(no folder)"] == "(no folder)"
+  && one["?"] == "?" && one["personal/claude-swipe @claude/panel-redesign"] == "claude-swipe @claude/panel-redesign")
+let sf = shortFolders(["personal/acme", "clients/acme", "clients/bookmygarage", "clients", "~/Developer", "a/x/acme", "personal/claude-swipe @main", "personal/claude-swipe"])
+check("shortFoldersUnique", sf["personal/acme"] == "personal/acme" && sf["clients/acme"] == "clients/acme"
+  && sf["clients/bookmygarage"] == "bookmygarage" && sf["clients"] == "clients" && sf["~/Developer"] == "Developer")
+check("shortFoldersDeeper", sf["a/x/acme"] == "x/acme")
+check("shortFoldersWorktree", sf["personal/claude-swipe @main"] == "claude-swipe @main" && sf["personal/claude-swipe"] == "claude-swipe")
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

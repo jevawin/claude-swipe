@@ -96,13 +96,26 @@ func panelMayHide(settingsOpen: Bool, explicit: Bool) -> Bool {
     !settingsOpen || explicit
 }
 
-// What a row shows for a folder label: only its last folder ("clients/funky-pigeon"
-// shows "funky-pigeon", "~/Developer" shows "Developer"). A worktree keeps its branch
-// ("claude-swipe @main"). The full label stays the key for icons, search and Settings.
-func shortFolder(_ label: String) -> String {
-    let parts = label.components(separatedBy: " @")
-    let path = parts[0]
-    let last = path.split(separator: "/").last.map(String.init) ?? path
-    let short = last.isEmpty ? path : last
-    return parts.count > 1 ? short + " @" + parts.dropFirst().joined(separator: " @") : short
+// What each row shows for its folder label: the shortest run of last folders that no
+// other folder in the list shares. "clients/bookmygarage" shows "bookmygarage", but
+// "clients/acme" and "personal/acme" both keep their parent. "~/Developer" shows
+// "Developer". A worktree keeps its branch ("claude-swipe @main"). The full label stays
+// the key for icons, search and Settings.
+func shortFolders(_ labels: [String]) -> [String: String] {
+    func split(_ label: String) -> (path: [Substring], branch: String?) {
+        let parts = label.components(separatedBy: " @")
+        let branch = parts.count > 1 ? parts.dropFirst().joined(separator: " @") : nil
+        return (parts[0].split(separator: "/"), branch)
+    }
+    let paths = Set(labels.map { split($0).path })
+    var out: [String: String] = [:]
+    for label in Set(labels) {
+        let (path, branch) = split(label)
+        guard !path.isEmpty else { out[label] = label; continue }
+        var n = 1
+        while n < path.count && paths.contains(where: { $0 != path && $0.suffix(n) == path.suffix(n) }) { n += 1 }
+        let short = path.suffix(n).joined(separator: "/")
+        out[label] = branch.map { short + " @" + $0 } ?? short
+    }
+    return out
 }

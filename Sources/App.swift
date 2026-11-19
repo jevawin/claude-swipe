@@ -196,6 +196,9 @@ struct PanelView: View {
     // What Return opens: the first match in section order.
     var firstMatch: Chat? { sections.flatMap { s in filtered.filter { $0.section == s.key } }.first }
 
+    // Short folder names, worked out across every chat so they don't change while searching.
+    var folderNames: [String: String] { shortFolders(store.chats.map(\.folder)) }
+
     // What the panel draws: the saved values, forced solid by Reduce transparency.
     var look: AppearanceValues {
         effective(prefs.appearance, solidRequired: prefs.systemSolid, glassAvailable: glassAvailable)
@@ -260,6 +263,7 @@ struct PanelView: View {
 
     @ViewBuilder func section(_ sec: (key: String, label: String), _ items: [Chat]) -> some View {
         let collapsible = sec.key == "done"
+        let names = folderNames
         let open_ = !collapsible || prefs.showDone || !store.query.isEmpty
         HStack(spacing: 0) {
             Text(sec.label).font(.system(size: 12.5, weight: .semibold))
@@ -283,7 +287,7 @@ struct PanelView: View {
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, c in
                     ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
-                            density: prefs.density, divider: i > 0)
+                            density: prefs.density, divider: i > 0, folderName: names[c.folder])
                         .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
                         .contentShape(Rectangle())
                         .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
@@ -331,6 +335,7 @@ struct ChatRow: View {
     let selected: Bool
     let density: Density
     let divider: Bool
+    var folderName: String? = nil  // shortFolders' name for chat.folder; nil shows the last folder
     @ObservedObject var prefs = Prefs.shared
 
     var folder: String? { chat.folder != prefs.homeFolder ? chat.folder : nil }
@@ -359,7 +364,7 @@ struct ChatRow: View {
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(ageText(chat.engaged))
-                        if let f = folder { Text(shortFolder(f)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
+                        if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                     }
                     .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
                 }
@@ -372,7 +377,7 @@ struct ChatRow: View {
                             Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                             Spacer(minLength: 8)
                             Group {
-                                if let f = folder { Text(shortFolder(f)).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
+                                if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                                 Text(ageText(chat.engaged))
                             }
                             .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
