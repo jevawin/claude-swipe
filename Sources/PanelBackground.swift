@@ -16,9 +16,13 @@ let glassAvailable: Bool = {
     return false
 }()
 
-// Frosted's material. .sidebar gave the most even blur in both themes in the harness
-// images; .sheet, .windowBackground, .contentBackground and .underPageBackground are opaque.
-let frostedMaterial: NSVisualEffectView.Material = .sidebar
+// Frosted's material. Measured 19 Nov 2026 (harness, See-through 100%, gap pixel of the
+// panel over a white / dark window): .sidebar paints its own theme tint so thickly that
+// See-through barely changed anything (dark theme over dark window: 59 vs 50 solid).
+// .hudWindow has the thinnest tint of the public materials tried (dark over white 168
+// vs 103 for .sidebar; light over dark 168 vs 224) and still blurs text away.
+// .sheet, .windowBackground, .contentBackground and .underPageBackground are opaque.
+let frostedMaterial: NSVisualEffectView.Material = .hudWindow
 
 // Layer 1's blur: behind-window, full panel. Hidden unless the background is Frosted.
 struct PanelMaterial: NSViewRepresentable {

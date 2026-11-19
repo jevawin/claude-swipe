@@ -468,7 +468,8 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 ForEach(all, id: \.self) { c in
                     PictureTile(label: name(c), selected: selected == c, action: { set(c) }) {
-                        MiniPanel(values: look(c), density: density?(c) ?? prefs.density)
+                        if let d = density?(c) { DensityPicture(density: d) }
+                        else { MiniPanel(values: look(c), density: prefs.density) }
                     }
                     .disabled(disabled(c)).opacity(disabled(c) ? 0.5 : 1)
                 }
@@ -889,6 +890,42 @@ struct MiniPanel: View {
                 .offset(x: w - pw)
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+// The Density tiles: a close-up of the solid panel, so the row layout is the only
+// difference. Cozy: two rows with a title and a summary line. Compact: five one-line rows.
+struct DensityPicture: View {
+    let density: Density
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let dark = scheme == .dark
+        let ink = dark ? Color.white : Color.black
+        let cozy = density == .cozy
+        VStack(spacing: 0) {
+            ForEach(0..<(cozy ? 2 : 5), id: \.self) { i in
+                if i > 0 { Rectangle().fill(ink.opacity(0.12)).frame(height: 0.5) }
+                HStack(spacing: 4) {
+                    Circle().fill(Theme.brand.opacity(0.7)).frame(width: cozy ? 9 : 5, height: cozy ? 9 : 5)
+                    VStack(alignment: .leading, spacing: 2.5) {
+                        Capsule().fill(ink.opacity(0.75)).frame(width: 30, height: 2.5)
+                        if cozy { Capsule().fill(ink.opacity(0.35)).frame(width: 44, height: 2) }
+                    }
+                    Spacer(minLength: 0)
+                    Capsule().fill(ink.opacity(0.35)).frame(width: 8, height: 2)
+                }
+                .padding(.horizontal, 5)
+                .frame(height: cozy ? 20 : 8.4)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 4).fill(dark ? Color(white: 0.19) : .white))
+        .padding(4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
         .accessibilityHidden(true)

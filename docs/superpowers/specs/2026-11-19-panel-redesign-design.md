@@ -10,7 +10,7 @@ This replaces the Blur, Edge fade, Glass and Style rows below. Where they confli
 - Jamie tried the first build: Blur and Glass "do nothing" (they read as a solid panel under the 60% tint), and the four see-through controls were too many to get right. A design review (Fable) recommended the set below.
 - **Appearance pane is now:**
   - Theme.
-  - **Background**: Solid, Frosted or Glass tiles. Solid has no blur and is opaque. Frosted is one behind-window material (`.sidebar`) across the panel. Glass (macOS 26+) puts each group and the search pill on Liquid Glass (Regular), with no panel material. Below 26 the Glass tile is disabled and a saved Glass shows as Frosted.
+  - **Background**: Solid, Frosted or Glass tiles. Solid has no blur and is opaque. Frosted is one behind-window material (`.hudWindow`) across the panel. (First build used `.sidebar`; its own thick theme tint made See-through look inert over same-tone windows, so it was swapped after measuring. Over a window the same tone as the theme, blur still shows little: there is nothing to show.) Glass (macOS 26+) puts each group and the search pill on Liquid Glass (Regular), with no panel material. Below 26 the Glass tile is disabled and a saved Glass shows as Frosted.
   - **See-through**: one slider, 0 to 100 − floor. It sets panel tint and group fill together (group fill = 55% × opacity, 32% × opacity on Glass). Disabled for Solid.
   - **Density**: its own group.
   - Reset to defaults: Frosted, See-through 34% (opacity 66), Cozy, Auto theme.
