@@ -37,8 +37,9 @@ final class Prefs: ObservableObject {
     @Published var aiSort: Bool { didSet { d.set(aiSort, forKey: "aiSort"); scriptChanged() } }
     @Published var aiIcon: Bool { didSet { d.set(aiIcon, forKey: "aiIcon"); scriptChanged() } }
     @Published var aiClear: Bool { didSet { d.set(aiClear, forKey: "aiClear"); scriptChanged() } }
-    // Reduce transparency or Increase contrast is on: the panel draws solid. Wired to macOS in the live panel change.
-    @Published var systemSolid = false
+    // Reduce transparency or Increase contrast is on: the panel draws solid (display only;
+    // saved values are kept). Updated live when either system setting changes.
+    @Published var systemSolid = Prefs.readSystemSolid()
     @Published var loginOn = false  // mirrors SMAppService; set by AppDelegate.updateLoginItem
 
     var onboarded: Bool {
@@ -72,6 +73,14 @@ final class Prefs: ObservableObject {
         aiSort = d.bool(forKey: "aiSort")
         aiIcon = d.bool(forKey: "aiIcon")
         aiClear = d.bool(forKey: "aiClear")
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.systemSolid = Prefs.readSystemSolid() }
+    }
+
+    static func readSystemSolid() -> Bool {
+        let w = NSWorkspace.shared
+        return w.accessibilityDisplayShouldReduceTransparency || w.accessibilityDisplayShouldIncreaseContrast
     }
 
     // Coalesces several switches flipped at once (the welcome switch sets two) into one refresh.
@@ -405,7 +414,9 @@ struct SettingsView: View {
         let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
-                WarningBox(text: "Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls.")
+                WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+                    ? "Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls."
+                    : "Increase contrast is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls.")
             }
             Group_ {
                 Row(title: "Theme") {

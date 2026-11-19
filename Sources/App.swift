@@ -560,8 +560,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if Date().timeIntervalSince(store.lastRun) > 20 { store.refresh() }
     }
 
+    // The panel stays up the whole time Settings is open, so changes show live.
+    var settingsOpen: Bool { settingsWindow?.isVisible == true }
+
     func hide(reason: String = "") {
-        guard shown else { return }
+        guard shown, !settingsOpen else { return }
         debugLog("hide \(reason)")
         shown = false
         let f = panel.frame
@@ -701,7 +704,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func bringUp(_ w: NSWindow) {
-        hide()
+        if w !== settingsWindow { hide() }  // Settings keeps the panel up; Welcome doesn't
         status.start()
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
@@ -717,7 +720,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 title: "ClaudeSwipe Settings", size: NSSize(width: 760, height: 580), resizable: true)
         }
         updateLoginItem()
-        bringUp(settingsWindow!)
+        let w = settingsWindow!
+        if !w.isVisible {
+            // Panel on the Settings window's screen (the mouse's on first open), then the
+            // window centred, moved left just enough to clear the panel.
+            let p = NSEvent.mouseLocation
+            let screen = w.screen ?? NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) ?? NSScreen.main!
+            showPanel(on: screen)
+            w.setFrameOrigin(settingsOrigin(window: w.frame.size, panel: panelTarget, visible: screen.visibleFrame))
+        } else if let screen = w.screen {
+            showPanel(on: screen)
+        }
+        bringUp(w)
+    }
+
+    // Shows the panel on a screen unless it's already up there.
+    func showPanel(on screen: NSScreen) {
+        if shown && screen.visibleFrame.contains(NSPoint(x: panelTarget.midX, y: panelTarget.midY)) { return }
+        show(on: screen)
+    }
+
+    // Settings dragged to another screen: the panel follows it.
+    func windowDidChangeScreen(_ n: Notification) {
+        guard let w = n.object as? NSWindow, w === settingsWindow, w.isVisible, let screen = w.screen else { return }
+        showPanel(on: screen)
     }
 
     func showWelcome() {
