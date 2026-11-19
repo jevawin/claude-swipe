@@ -92,8 +92,31 @@ struct GroupBackground: View {
                 GlassView(radius: radius)
             }
             shape.fill(fill)
-            shape.strokeBorder(dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05), lineWidth: 1)
+            if look.background == .glass {
+                // Depth for Glass: a sheen across the top and a rim lit from the top left,
+                // fading to a faint edge at the bottom right.
+                shape.fill(LinearGradient(stops: [.init(color: .white.opacity(dark ? 0.10 : 0.35), location: 0),
+                                                  .init(color: .white.opacity(0), location: 0.45)],
+                                          startPoint: .top, endPoint: .bottom))
+                shape.strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.35 : 0.9),
+                                                           .white.opacity(dark ? 0.05 : 0.25),
+                                                           .white.opacity(dark ? 0.15 : 0.5)],
+                                                  startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+            } else {
+                shape.strokeBorder(dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05), lineWidth: 1)
+            }
         }
         .allowsHitTesting(false)
+    }
+}
+
+// Glass groups float: a soft shadow under each one. Applied after the group is clipped,
+// so the shadow isn't cut off.
+struct GlassLift: ViewModifier {
+    let on: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.shadow(color: .black.opacity(on ? (scheme == .dark ? 0.35 : 0.12) : 0), radius: 8, x: 0, y: 3)
     }
 }

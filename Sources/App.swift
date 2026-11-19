@@ -225,6 +225,7 @@ struct PanelView: View {
         .padding(.horizontal, 12)
         .frame(height: 40)
         .background(GroupBackground(look: look))
+        .modifier(GlassLift(on: look.background == .glass))
         .onChange(of: store.focusTick) { searchFocused = true }
         .onAppear { searchFocused = true }
     }
@@ -292,6 +293,7 @@ struct PanelView: View {
             }
             .background(GroupBackground(look: look))
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .modifier(GlassLift(on: look.background == .glass))
         }
     }
 }
