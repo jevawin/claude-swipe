@@ -19,9 +19,17 @@ struct Chat: Codable, Identifiable, Hashable {
     let app: String
     let desktop_id: String?
     let cwd: String?
-    var emoji: String?
-    var own_emoji: Bool?  // your own pick decides the emoji (counted for Re-pick)
+    var icon: String?     // topic SF Symbol name; only names in icons.json are shown
+    var own_icon: Bool?   // your own pick decides the icon (counted for Re-pick)
 }
+
+// The SF Symbol names topic icons may use (icons.json in Resources, shared with recent_chats.py).
+let iconAllowlist: Set<String> = {
+    guard let url = Bundle.main.url(forResource: "icons", withExtension: "json"),
+          let data = try? Data(contentsOf: url),
+          let d = try? JSONDecoder().decode([String: [String]].self, from: data) else { return [] }
+    return Set(d["symbols"] ?? [])
+}()
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
 func debugLog(_ msg: String) {
@@ -128,14 +136,15 @@ enum Theme {
 // MARK: - Views
 
 // Status sets the card's tile (or its badge): colour, SF Symbol and a spoken name.
+// Symbol names live in statusSymbol (Appearance.swift).
 let statusStyle: [String: (color: Color, icon: String)] = [
-    "running": (Color(nsColor: hsl(210, 60, 52)), "ellipsis"),
-    "waiting": (Color(nsColor: hsl(38, 92, 50)), "questionmark"),        // a question for you
-    "blocked": (Color(nsColor: hsl(0, 72, 52)), "xmark"),               // needs a click to carry on
-    "done": (Color(nsColor: hsl(120, 35, 42)), "checkmark"),
-    "finished": (Color(nsColor: hsl(262, 45, 58)), "archivebox.fill"),   // ready to archive or delete
-    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), "exclamationmark"),
-    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), "circle.dotted"),
+    "running": (Color(nsColor: hsl(210, 60, 52)), statusSymbol["running"]!),
+    "waiting": (Color(nsColor: hsl(38, 92, 50)), statusSymbol["waiting"]!),     // a question for you
+    "blocked": (Color(nsColor: hsl(0, 72, 52)), statusSymbol["blocked"]!),      // needs a click to carry on
+    "done": (Color(nsColor: hsl(120, 35, 42)), statusSymbol["done"]!),
+    "finished": (Color(nsColor: hsl(262, 45, 58)), statusSymbol["finished"]!),  // ready to archive or delete
+    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["stuck"]!),
+    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["unsure"]!),
 ]
 
 // Sections come from recent_chats.py: touched in the last hour, then not-done
@@ -163,7 +172,7 @@ func ageText(_ s: Double) -> String {
 struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
-    let editEmoji: (Chat) -> Void
+    let editIcon: (Chat) -> Void
     let openSettings: () -> Void
     @ObservedObject private var prefs = Prefs.shared
     @FocusState private var searchFocused: Bool
@@ -173,7 +182,7 @@ struct PanelView: View {
         let words = store.query.lowercased().split(separator: " ")
         if words.isEmpty { return store.chats }
         return store.chats.filter { c in
-            let hay = "\(c.title) \(c.folder) \(c.why) \(c.emoji ?? "")".lowercased()
+            let hay = "\(c.title) \(c.folder) \(c.why)".lowercased()  // not symbol names
             return words.allSatisfy { hay.contains($0) }
         }
     }
@@ -241,7 +250,7 @@ struct PanelView: View {
                                         .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
                                         .onTapGesture { open(c) }
                                         .contextMenu {
-                                            Button("Change emoji…") { editEmoji(c) }
+                                            Button("Change topic icon…") { editIcon(c) }
                                         }
                                 }
                             }
@@ -271,23 +280,13 @@ struct Card: View {
     @ObservedObject var prefs = Prefs.shared
     @LocalState private var hover = false
 
-    var emoji: String? { chat.emoji.flatMap { $0.isEmpty ? nil : $0 } }
-
     // Settings › Cards › Card icon. "status": status tile with the emoji as a badge
     // (no emoji, no badge). "emoji": emoji tile (💬 if none) with the status as a badge.
     @ViewBuilder var tile: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
             RoundedRectangle(cornerRadius: 9).fill(st.color)
-                .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
-                .overlay(alignment: .bottomTrailing) {
-                    if let e = emoji {
-                        Circle().fill(Theme.cardHover)
-                            .frame(width: 20, height: 20)
-                            .overlay(Text(e).font(.system(size: 11)))
-                            .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                            .offset(x: 6, y: 6)
-                    }
-                }
+                .overlay(Image(systemName: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist))
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
     }
 
     var body: some View {
@@ -367,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // The see-through background comes from PanelView (PanelBackground.swift), so the window stays clear.
         panel.contentView = NSHostingView(rootView: PanelView(
             store: store, open: { [weak self] in self?.open($0) },
-            editEmoji: { [weak self] in self?.editEmoji($0) },
+            editIcon: { [weak self] in self?.editIcon($0) },
             openSettings: { [weak self] in self?.openSettings() }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -588,53 +587,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // Right-click > Change emoji. Saves to chat-emoji.json "overrides", which beat Haiku's picks.
-    func editEmoji(_ c: Chat) {
+    // Right-click > Change topic icon. Saves to chat-icons.json "overrides", which beat the AI's picks.
+    func editIcon(_ c: Chat) {
         hide()
         let file = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Library/Application Support/claude-swipe/chat-emoji.json")
+            .appendingPathComponent("Library/Application Support/claude-swipe/chat-icons.json")
         var data = (try? JSONSerialization.jsonObject(with: Data(contentsOf: file))) as? [String: Any] ?? [:]
         var overrides = data["overrides"] as? [String: String] ?? [:]
         let auto = data["auto"] as? [String: String] ?? [:]
 
         let alert = NSAlert()
-        alert.messageText = "Emoji for “\(c.title)”"
-        alert.informativeText = "Type or pick one emoji. The emoji picker opens with it; Control-Command-Space reopens it."
+        alert.messageText = "Topic icon for “\(c.title)”"
+        alert.informativeText = "Pick an icon, or use automatic to let the AI or the folder decide."
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
-        if overrides[c.id] != nil { alert.addButton(withTitle: "Remove my pick") }
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 28))
-        field.font = .systemFont(ofSize: 18)
-        field.stringValue = c.emoji ?? ""
-        alert.accessoryView = field
-        alert.layout()
-        alert.window.initialFirstResponder = field
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 240, height: 28), pullsDown: false)
+        popup.addItem(withTitle: "Use automatic")
+        popup.menu?.addItem(.separator())
+        for name in iconAllowlist.sorted() {
+            popup.addItem(withTitle: name)
+            popup.lastItem?.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        }
+        if let mine = overrides[c.id], iconAllowlist.contains(mine) { popup.selectItem(withTitle: mine) }
+        alert.accessoryView = popup
         NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            alert.window.makeFirstResponder(field)
-            NSApp.orderFrontCharacterPalette(nil)
-        }
-        let choice = alert.runModal()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        var newEmoji: String?
-        switch choice {
-        case .alertFirstButtonReturn:
-            guard let first = field.stringValue.trimmingCharacters(in: .whitespaces).first else { return }
-            newEmoji = String(first)
-            overrides[c.id] = newEmoji
-        case .alertThirdButtonReturn:
-            overrides[c.id] = nil
-            newEmoji = nil  // the refresh below fills in the AI or folder emoji
-        default:
-            return
-        }
+        let pick = popup.indexOfSelectedItem == 0 ? nil : popup.titleOfSelectedItem
+        overrides[c.id] = pick  // nil removes your pick; the refresh fills in the AI or folder icon
         data["overrides"] = overrides
         data["auto"] = auto
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let out = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted]) {
             try? out.write(to: file)
         }
-        if let i = store.chats.firstIndex(where: { $0.id == c.id }) { store.chats[i].emoji = newEmoji }
+        if let i = store.chats.firstIndex(where: { $0.id == c.id }), let p = pick { store.chats[i].icon = p }
         store.refresh()
     }
 
@@ -698,7 +685,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func confirmRepick() {
         let p = Prefs.shared
         let folder = p.iconSource == "folder"
-        let rows = store.chats.filter { $0.own_emoji != true }
+        let rows = store.chats.filter { $0.own_icon != true }
         let n = folder ? Set(rows.map(\.folder)).count : rows.count
         let noun = folder ? (n == 1 ? "folder" : "folders") : (n == 1 ? "chat" : "chats")
         let alert = NSAlert()

@@ -84,3 +84,16 @@ func migrateIconPrefs(_ d: UserDefaults) {
     d.removeObject(forKey: "showEmoji")
     d.set(true, forKey: "iconPrefsMigrated")
 }
+
+// Each state's own SF Symbol. statusStyle (App.swift) reads its names from here.
+let statusSymbol: [String: String] = [
+    "running": "ellipsis", "waiting": "questionmark", "blocked": "xmark", "done": "checkmark",
+    "finished": "archivebox.fill", "stuck": "exclamationmark", "unsure": "circle.dotted",
+]
+
+// The chat's topic symbol if it's on the allowlist, else the state's own symbol.
+// So a stale emoji or a made-up AI pick never shows a blank circle.
+func topicSymbol(_ icon: String?, status: String, allow: Set<String>) -> String {
+    if let i = icon, allow.contains(i) { return i }
+    return statusSymbol[status] ?? statusSymbol["unsure"]!
+}

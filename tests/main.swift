@@ -36,5 +36,9 @@ check("migrationCopies", d.string(forKey: "iconSource") == "folder" && d.bool(fo
 d.set("subject", forKey: "iconSource"); migrateIconPrefs(d)
 check("migrationRunsOnce", d.string(forKey: "iconSource") == "subject")
 
+check("topicSymbolListed", topicSymbol("key", status: "waiting", allow: ["key"]) == "key")
+check("topicSymbolFallback", topicSymbol("🔑", status: "waiting", allow: ["key"]) == "questionmark")
+check("topicSymbolNil", topicSymbol(nil, status: "done", allow: ["key"]) == "checkmark")
+
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

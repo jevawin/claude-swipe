@@ -100,10 +100,10 @@ final class Prefs: ObservableObject {
 
     // Flags for recent_chats.py. Every AI flag is opt-in, so none set means no requests.
     var scriptArgs: [String] {
-        var a = ["--model", aiModel, "--emoji-from", iconSource]  // script flags renamed in the topic icons change
+        var a = ["--model", aiModel, "--icon-from", iconSource]
         if aiSort { a.append("--sort") }
         if aiClear { a.append("--clear") }
-        if pickIcon { a += ["--emoji", iconSource] }
+        if pickIcon { a += ["--icon", iconSource] }
         return a
     }
 }
@@ -456,7 +456,7 @@ struct SettingsView: View {
         Chat(id: "preview", status: "waiting", why: "Want me to send the draft to the team now?",
              title: "Write the launch post", folder: "clients/acme",
              age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
-             emoji: "✍️", own_emoji: nil)
+             icon: "pencil", own_icon: nil)
     }
 
     var windows: some View {
