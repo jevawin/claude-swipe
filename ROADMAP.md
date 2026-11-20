@@ -16,7 +16,7 @@ One item per session. Branch for each item, PR when ready, don't commit to `main
    - ~~Hide the folder label for a home folder.~~ Done; item 18 asks about more than one folder.
    - ~~"Ready to clear" badge colour.~~ Badges are gone; Ready to clear is a section with a purple state icon (PR #16). The grouping behind it is item 7.
    - First-run screen: for each feature that needs a permission, a short demo, what it needs, and an on/off choice. Built in some form; not checked against this.
-   - **README is out of date.** It still describes emoji, the old Cards settings, `folder-emoji.json` and the `--emoji` flag, and has no Appearance pane.
+   - ~~Update the README.~~ Done for the redesign (topic icons, Appearance pane, folder names), 20 Nov 2026.
 3. **Project structure for two people and their Claudes.** Clone `clumeral-game` and `pub-quiz` temporarily and review all their docs, not just `.clancy` (no longer used). A short `CLAUDE.md` that points to the right doc for each kind of work, a QA checklist, "always branch and PR", and when to use superpowers skills.
 4. **Folder labels: project roots.** Plan and design properly first. Today's rules are hard-coded: strip `~/Developer/`, and (from PR #1) anything up to `/My Drive/` or `/iCloud~md~obsidian/Documents/`.
    - One list of project roots. The longest matching root is stripped.
