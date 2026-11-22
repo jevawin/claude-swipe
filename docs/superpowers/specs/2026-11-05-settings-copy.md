@@ -21,9 +21,9 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Below the button: Needs a Mac permission. Turn on ClaudeSwipe in System Settings › Privacy & Security › Device Control and Data Access (called Accessibility on older macOS).
 - Privacy note: ClaudeSwipe only uses this to find, raise and minimise Claude's windows. It reads their titles, never what is in them.
 - Sub-switch: Also minimise other Claude windows / When you open a chat, every other Claude window goes to the Dock. Hold Option while you click a chat to flip this setting for that one click.
-- Block 2 title: Sort unclear chats and pick emoji
-- Block 2 body: Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.
-- Picture captions: Before: chat marked unsure, no emoji / After: chat sorted, with an emoji
+- Block 2 title: Sort unclear chats and pick topic icons
+- Block 2 body: Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick a topic icon for each chat.
+- Picture captions: Before: chat marked unsure, no topic icon / After: chat sorted, with a topic icon
 - Warning: This uses your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan.
 - Privacy note: ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.
 - Status lines: claude command found and signed in / claude command found but not signed in / claude command not found
@@ -36,15 +36,20 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Button: Show my chats
 
 ## Settings › General
-- Theme: Auto / Light / Dark
 - Launch at login
 - Welcome screen: Show again
 
+## Settings › Appearance
+- Theme: Auto / Light / Dark
+- Background: Solid / Frosted / Glass (picture tiles). Helper: Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass. (below macOS 26: Frosted blurs what's behind. Glass needs macOS 26 or later.)
+- See-through / How much of what's behind shows through your chats. Higher is harder to read over busy windows.
+- Density: Cozy / Compact. Helper: Cozy shows each chat's summary. Compact fits more chats on one line each.
+- Button: Reset to defaults
+- When macOS forces a solid panel: Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls. (Increase contrast gets the same line with its own name.)
+
 ## Settings › Cards
 - Preview
-- Card icon: Status first (emoji as a small badge) / Emoji first (status as a small badge)
-- Show emoji / Off: cards show the status icon on its own
-- Emoji from: Chat subject / Folder. Helper: Claude picks these, so AI must be on. Right-click a chat to pick your own.
+- Topic icon from: Chat subject / Folder. Helper: Claude picks these, so AI must be on. Right-click a chat to pick your own.
 - Hide all folder labels / Cards show no folder at all
 - Hide folder labels for: a checkbox per folder ("No folders yet" when there are none). Helper: Most chats sit in one or two folders. Hide those labels to keep cards tidy. Greyed out while Hide all folder labels is on.
 
@@ -52,16 +57,16 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - The same "Jump to the right window" block as Welcome step 2 (title, body, pictures, needs line), with the switch named "Minimise other Claude windows".
 
 ## Settings › AI
-- Starts with the same "Sort unclear chats and pick emoji" block as Welcome step 2 (title, body, pictures, status line), with this warning:
+- Starts with the same "Sort unclear chats and pick topic icons" block as Welcome step 2 (title, body, pictures, status line), with this warning:
 - Warning: These features use your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan.
 - Model: Haiku / Sonnet. Helper: Haiku is faster and uses less of your plan
 - Sort unclear chats / Off: those chats show as "unsure"
-- Let AI pick emoji / Off: only your own emoji picks show
+- Pick a topic icon for each chat / Off: chats show their state icon, or your own pick
 - Ready to clear section / Checks each done chat once more to see if the whole job is finished. Chats that pass get their own section.
-- Re-pick all emoji / Changing the model or emoji source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay. / Button: Re-pick…
-- Re-pick confirm dialog title: Re-pick all emoji?
-- Re-pick confirm dialog body: ClaudeSwipe will ask {model} to pick an emoji again for {count} chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change.
-- Re-pick confirm dialog body (when Emoji from is Folder): ClaudeSwipe will ask {model} to pick an emoji again for {count} folders with chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change.
+- Re-pick all topic icons / Changing the model or icon source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay. / Button: Re-pick…
+- Re-pick confirm dialog title: Re-pick all topic icons?
+- Re-pick confirm dialog body: ClaudeSwipe will ask {model} to pick a topic icon again for {count} chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change.
+- Re-pick confirm dialog body (when Topic icon from is Folder): ClaudeSwipe will ask {model} to pick a topic icon again for {count} folders with chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change.
 - Re-pick confirm dialog buttons: Re-pick / Cancel
 - Status line: claude command found and signed in
 

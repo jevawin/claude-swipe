@@ -19,9 +19,17 @@ struct Chat: Codable, Identifiable, Hashable {
     let app: String
     let desktop_id: String?
     let cwd: String?
-    var emoji: String?
-    var own_emoji: Bool?  // your own pick decides the emoji (counted for Re-pick)
+    var icon: String?     // topic SF Symbol name; only names in icons.json are shown
+    var own_icon: Bool?   // your own pick decides the icon (counted for Re-pick)
 }
+
+// The SF Symbol names topic icons may use (icons.json in Resources, shared with recent_chats.py).
+let iconAllowlist: Set<String> = {
+    guard let url = Bundle.main.url(forResource: "icons", withExtension: "json"),
+          let data = try? Data(contentsOf: url),
+          let d = try? JSONDecoder().decode([String: [String]].self, from: data) else { return [] }
+    return Set(d["symbols"] ?? [])
+}()
 
 // Appends to ~/Library/Logs/ClaudeSwipe.log (NSLog lines didn't show in `log show`).
 func debugLog(_ msg: String) {
@@ -123,19 +131,25 @@ enum Theme {
     static let card = themed(.white, hsl(60, 2.1, 18.4))                    // --bg-000
     static let cardHover = themed(hsl(53, 28.6, 94.5), hsl(60, 2.1, 21))
     static let sidebar = themed(hsl(50, 25, 92), hsl(60, 2.5, 12.5))
+    // The redesigned panel's secondary text, brightened in dark to stay readable see-through.
+    static let panelSecondary = themed(NSColor(srgbRed: 0x57 / 255.0, green: 0x56 / 255.0, blue: 0x4F / 255.0, alpha: 1),
+                                       NSColor(srgbRed: 0xC4 / 255.0, green: 0xC2 / 255.0, blue: 0xBA / 255.0, alpha: 1))
+    // Group outlines and row dividers: 5% black in light, 6% white in dark.
+    static let hairline = themed(NSColor(white: 0, alpha: 0.05), NSColor(white: 1, alpha: 0.06))
 }
 
 // MARK: - Views
 
 // Status sets the card's tile (or its badge): colour, SF Symbol and a spoken name.
+// Symbol names live in statusSymbol (Appearance.swift).
 let statusStyle: [String: (color: Color, icon: String)] = [
-    "running": (Color(nsColor: hsl(210, 60, 52)), "ellipsis"),
-    "waiting": (Color(nsColor: hsl(38, 92, 50)), "questionmark"),        // a question for you
-    "blocked": (Color(nsColor: hsl(0, 72, 52)), "xmark"),               // needs a click to carry on
-    "done": (Color(nsColor: hsl(120, 35, 42)), "checkmark"),
-    "finished": (Color(nsColor: hsl(262, 45, 58)), "archivebox.fill"),   // ready to archive or delete
-    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), "exclamationmark"),
-    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), "circle.dotted"),
+    "running": (Color(nsColor: hsl(210, 60, 52)), statusSymbol["running"]!),
+    "waiting": (Color(nsColor: hsl(38, 92, 50)), statusSymbol["waiting"]!),     // a question for you
+    "blocked": (Color(nsColor: hsl(0, 72, 52)), statusSymbol["blocked"]!),      // needs a click to carry on
+    "done": (Color(nsColor: hsl(120, 35, 42)), statusSymbol["done"]!),
+    "finished": (Color(nsColor: hsl(262, 45, 58)), statusSymbol["finished"]!),  // ready to archive or delete
+    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["stuck"]!),
+    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["unsure"]!),
 ]
 
 // Sections come from recent_chats.py: touched in the last hour, then not-done
@@ -163,52 +177,65 @@ func ageText(_ s: Double) -> String {
 struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
-    let editEmoji: (Chat) -> Void
+    let editIcon: (Chat) -> Void
     let openSettings: () -> Void
     @ObservedObject private var prefs = Prefs.shared
     @FocusState private var searchFocused: Bool
+    @LocalState private var hovered: String? = nil
 
     // Every word must appear somewhere in title, folder or preview.
     var filtered: [Chat] {
         let words = store.query.lowercased().split(separator: " ")
         if words.isEmpty { return store.chats }
         return store.chats.filter { c in
-            let hay = "\(c.title) \(c.folder) \(c.why) \(c.emoji ?? "")".lowercased()
+            let hay = "\(c.title) \(c.folder) \(c.why)".lowercased()  // not symbol names
             return words.allSatisfy { hay.contains($0) }
         }
     }
 
+    // What Return opens: the first match in section order.
+    var firstMatch: Chat? { sections.flatMap { s in filtered.filter { $0.section == s.key } }.first }
+
+    // Short folder names, worked out across every chat so they don't change while searching.
+    var folderNames: [String: String] { shortFolders(store.chats.map(\.folder)) }
+
+    // What the panel draws: the saved values, forced solid by Reduce transparency.
+    var look: AppearanceValues {
+        effective(prefs.appearance, solidRequired: prefs.systemSolid, glassAvailable: glassAvailable)
+    }
+
+    // Search as the title: a 40pt pill with Refresh and Settings inside.
+    var searchPill: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(Theme.panelSecondary)
+                .accessibilityHidden(true)
+            TextField("Search Claude chats", text: $store.query)
+                .textFieldStyle(.plain)
+                .font(.system(size: 15, weight: .medium))
+                .focused($searchFocused)
+                .onSubmit { if let first = firstMatch { open(first) } }
+            if store.updating { ProgressView().controlSize(.small) }
+            Button { store.refresh() } label: { Image(systemName: "arrow.clockwise").font(.system(size: 13)) }
+                .buttonStyle(.borderless)
+                .help("Refresh")
+                .accessibilityLabel("Refresh")
+            Button { openSettings() } label: { Settings2Image() }
+                .buttonStyle(.borderless)
+                .help("Settings")
+                .accessibilityLabel("Settings")
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .background(GroupBackground(look: look))
+        .modifier(GlassLift(on: look.background == .glass))
+        .onChange(of: store.focusTick) { searchFocused = true }
+        .onAppear { searchFocused = true }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Claude chats").font(.system(size: 16, weight: .semibold))
-                Spacer()
-                if store.updating { ProgressView().controlSize(.small) }
-                Button { store.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(.borderless)
-                    .help("Refresh")
-                    .accessibilityLabel("Refresh")
-                Button { openSettings() } label: { Settings2Image() }
-                    .buttonStyle(.borderless)
-                    .help("Settings")
-                    .accessibilityLabel("Settings")
-            }
-            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Theme.secondary)
-                TextField("Search chats or folders", text: $store.query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .focused($searchFocused)
-                    .onSubmit { if let first = sections.flatMap({ s in filtered.filter { $0.section == s.key } }).first { open(first) } }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.card))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
-            .padding(.horizontal, 12).padding(.bottom, 10)
-            .onChange(of: store.focusTick) { searchFocused = true }
-            .onAppear { searchFocused = true }
-            Rectangle().fill(Theme.border).frame(height: 1)
+            searchPill.padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
             if let n = store.notice {
                 Text(n).font(.system(size: 13)).padding(.horizontal, 16).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -218,119 +245,150 @@ struct PanelView: View {
                 Text(e).font(.system(size: 13)).foregroundStyle(.red).padding(16)
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(sections, id: \.key) { sec in
                         let items = filtered.filter { $0.section == sec.key }
-                        if !items.isEmpty {
-                            let collapsible = sec.key == "done"
-                            HStack(spacing: 4) {
-                                Text("\(sec.label) · \(items.count)")
-                                if collapsible {
-                                    Image(systemName: prefs.showDone ? "chevron.down" : "chevron.right")
-                                        .font(.system(size: 10, weight: .semibold))
-                                }
-                            }
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.secondary)
-                            .padding(.horizontal, 2).padding(.top, 8)
-                            .contentShape(Rectangle())
-                            .onTapGesture { if collapsible { prefs.showDone.toggle() } }
-                            if !collapsible || prefs.showDone || !store.query.isEmpty {
-                                ForEach(items) { c in
-                                    Card(chat: c)
-                                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
-                                        .onTapGesture { open(c) }
-                                        .contextMenu {
-                                            Button("Change emoji…") { editEmoji(c) }
-                                        }
-                                }
-                            }
-                        }
+                        if !items.isEmpty { section(sec, items) }
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 12)
             }
         }
         .foregroundStyle(Theme.text)
-        .background(Theme.bg)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
+        .background(ZStack {
+            PanelMaterial(visible: look.background == .frosted)
+            PanelTint(opacity: look.opacity)
+        })
+    }
+
+    @ViewBuilder func section(_ sec: (key: String, label: String), _ items: [Chat]) -> some View {
+        let collapsible = sec.key == "done"
+        let names = folderNames
+        let open_ = !collapsible || prefs.showDone || !store.query.isEmpty
+        HStack(spacing: 0) {
+            Text(sec.label).font(.system(size: 12.5, weight: .semibold))
+            Text(" \(items.count)").font(.system(size: 12.5)).opacity(0.8)
+            Spacer()
+            // Only Done collapses for now, so only Done gets a chevron.
+            if collapsible {
+                Image(systemName: open_ ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+        }
+        .foregroundStyle(Theme.text)
+        .modifier(HeaderGlow(on: look.opacity < 100))
+        .padding(.horizontal, 4).padding(.top, 12).padding(.bottom, 2)
+        .contentShape(Rectangle())
+        .onTapGesture { if collapsible { prefs.showDone.toggle() } }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        if open_ {
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, c in
+                    ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
+                            density: prefs.density, divider: i > 0, folderName: names[c.folder])
+                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
+                        .contentShape(Rectangle())
+                        .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
+                        .onTapGesture { open(c) }
+                        .contextMenu { Button("Change topic icon…") { editIcon(c) } }
+                }
+            }
+            .background(GroupBackground(look: look))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .modifier(GlassLift(on: look.background == .glass))
+        }
     }
 }
 
-// Notification-style card: icon tile, title with time top right, folder chip, preview.
-struct Card: View {
-    let chat: Chat
-    @ObservedObject var prefs = Prefs.shared
-    @LocalState private var hover = false
-
-    var emoji: String? { prefs.showEmoji ? chat.emoji.flatMap { $0.isEmpty ? nil : $0 } : nil }
-
-    // Settings › Cards › Card icon. "status": status tile with the emoji as a badge
-    // (no emoji, no badge). "emoji": emoji tile (💬 if none) with the status as a badge.
-    @ViewBuilder var tile: some View {
-        let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
-        if prefs.showEmoji && prefs.cardIcon == "emoji" {
-            RoundedRectangle(cornerRadius: 9).fill(Theme.cardHover)
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.border, lineWidth: 1))
-                .overlay(Text(emoji ?? "💬").font(.system(size: 19)))
-                .overlay(alignment: .bottomTrailing) {
-                    Circle().fill(st.color)
-                        .frame(width: 18, height: 18)
-                        .overlay(Image(systemName: st.icon).font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                        .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                        .offset(x: 6, y: 6)
-                }
+// When the panel is see-through, section headers get a soft glow in the panel colour to stay readable.
+struct HeaderGlow: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on {
+            content.shadow(color: Theme.bg.opacity(0.95), radius: 6).shadow(color: Theme.bg.opacity(0.8), radius: 12)
         } else {
-            RoundedRectangle(cornerRadius: 9).fill(st.color)
-                .overlay(Image(systemName: st.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white))
-                .overlay(alignment: .bottomTrailing) {
-                    if let e = emoji {
-                        Circle().fill(Theme.cardHover)
-                            .frame(width: 20, height: 20)
-                            .overlay(Text(e).font(.system(size: 11)))
-                            .overlay(Circle().stroke(Theme.card, lineWidth: 2))
-                            .offset(x: 6, y: 6)
-                    }
-                }
+            content
         }
+    }
+}
+
+// A circle in the state's colour (a tint of it), holding the topic symbol in that colour.
+struct StateIcon: View {
+    let symbol: String
+    let color: Color
+    let size: CGFloat
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Circle().fill(color.opacity(scheme == .dark ? 0.18 : 0.14))
+            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(color))
+            .frame(width: size, height: size)
+    }
+}
+
+// One chat in a section group. Cozy: icon, title over summary, age over folder.
+// Compact: one line, no summary, and it doesn't grow on hover (Jamie, 19 Nov 2026).
+struct ChatRow: View {
+    let chat: Chat
+    let selected: Bool
+    let density: Density
+    let divider: Bool
+    var folderName: String? = nil  // shortFolders' name for chat.folder; nil shows the last folder
+    @ObservedObject var prefs = Prefs.shared
+
+    var folder: String? { prefs.hidesLabel(chat.folder) ? nil : chat.folder }
+
+    var icon: some View {
+        let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
+        return StateIcon(symbol: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist),
+                         color: st.color, size: density == .cozy ? 32 : 24)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+    }
+
+    var summary: some View {
+        Text(chat.why).font(.system(size: 12.5)).foregroundStyle(Theme.panelSecondary).lineLimit(2)
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            tile
-                .frame(width: 34, height: 34)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(statusName[chat.status] ?? "Unsure")
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(chat.title).font(.system(size: 15, weight: .medium)).lineLimit(1)
-                    Spacer(minLength: 6)
-                    Text(ageText(chat.engaged)).font(.system(size: 13)).foregroundStyle(Theme.secondary)
+        Group {
+            if density == .cozy {
+                HStack(alignment: .center, spacing: 12) {
+                    icon
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        if !chat.why.isEmpty { summary }
+                    }
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(ageText(chat.engaged))
+                        if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
+                    }
+                    .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
                 }
-                HStack(spacing: 6) {
-                    if !prefs.hidesLabel(chat.folder) {
-                        Text(chat.folder)
-                            .font(.system(size: 12, design: .monospaced))
-                            .lineLimit(1).truncationMode(.middle)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(Theme.text.opacity(0.08)))
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Theme.border, lineWidth: 1))
+                .padding(.vertical, 13)
+            } else {
+                HStack(alignment: .center, spacing: 10) {
+                    icon
+                    HStack(spacing: 8) {
+                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Group {
+                            if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
+                            Text(ageText(chat.engaged))
+                        }
+                        .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
                     }
                 }
-                .padding(.top, 4)
-                if !chat.why.isEmpty {
-                    Text(chat.why).font(.system(size: 13)).foregroundStyle(Theme.text.opacity(0.85))
-                        .lineLimit(2).padding(.top, 7)
-                }
+                .padding(.vertical, 8)
             }
         }
-        .padding(10)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(hover ? Theme.cardHover : Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 14))
-        .onHover { hover = $0 }
+        .background(selected ? Theme.text.opacity(0.06) : .clear)
+        .overlay(alignment: .top) { if divider { Rectangle().fill(Theme.hairline).frame(height: 1) } }
     }
 }
 
@@ -367,13 +425,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false  // flush to the edge, no shadow on the left
+        // Glass has no panel material, so with See-through above 0 the gaps between groups are
+        // part-transparent and scrolls there went to the window behind (Jamie, 19 Nov 2026).
+        // Setting this explicitly is meant to make the whole frame take mouse and scroll
+        // events. Checked by Jamie on screen, 19 Nov 2026 (harness scroll events were dropped).
+        panel.ignoresMouseEvents = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
-        // Solid background comes from PanelView (Theme.bg), so the window itself stays clear.
+        // The see-through background comes from PanelView (PanelBackground.swift), so the window stays clear.
         panel.contentView = NSHostingView(rootView: PanelView(
             store: store, open: { [weak self] in self?.open($0) },
-            editEmoji: { [weak self] in self?.editEmoji($0) },
+            editIcon: { [weak self] in self?.editIcon($0) },
             openSettings: { [weak self] in self?.openSettings() }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -403,7 +466,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return nil
             }
             if e.keyCode == UInt16(kVK_Escape) && e.window === self?.panel {
-                if let s = self?.store, !s.query.isEmpty { s.query = "" } else { self?.hide() }
+                if let s = self?.store, !s.query.isEmpty { s.query = "" } else { self?.hide(reason: "esc", explicit: true) }
                 return nil
             }
             return e
@@ -479,7 +542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func toggle() {
-        if shown { hide(); return }
+        if shown { hide(reason: "toggle", explicit: true); return }
         let p = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) ?? NSScreen.main!
         show(on: screen)
@@ -487,7 +550,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func show(on screen: NSScreen) {
         let vf = screen.visibleFrame
-        let target = NSRect(x: vf.maxX - width - 8, y: vf.minY + 8, width: width, height: vf.height - 16)
+        let target = NSRect(x: vf.maxX - width, y: vf.minY, width: width, height: vf.height)
         panelTarget = target
         debugLog("show")
         panel.setFrame(target.offsetBy(dx: width + 20, dy: 0), display: false)
@@ -508,8 +571,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if Date().timeIntervalSince(store.lastRun) > 20 { store.refresh() }
     }
 
-    func hide(reason: String = "") {
-        guard shown else { return }
+    // The panel stays up the whole time Settings is open, so changes show live.
+    var settingsOpen: Bool { settingsWindow?.isVisible == true }
+
+    // explicit: you asked for it (opened a chat, Esc, the hotkey), so it hides even with Settings open.
+    func hide(reason: String = "", explicit: Bool = false) {
+        guard shown, panelMayHide(settingsOpen: settingsOpen, explicit: explicit) else { return }
         debugLog("hide \(reason)")
         shown = false
         let f = panel.frame
@@ -526,7 +593,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Settings › Windows › Minimise other Claude windows; Option flips it for one click.
         let keepOthers = Prefs.shared.minimiseOthers == NSEvent.modifierFlags.contains(.option)
         guard let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") else { return }
-        hide()
+        hide(reason: "open chat", explicit: true)
         // The deep link always loads the chat in the main window, so first try to
         // raise a window already showing it (a pop-out, or the main window itself).
         if let w = raiseClaudeWindow(titled: c.title) {
@@ -594,53 +661,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // Right-click > Change emoji. Saves to chat-emoji.json "overrides", which beat Haiku's picks.
-    func editEmoji(_ c: Chat) {
+    // Right-click > Change topic icon. Saves to chat-icons.json "overrides", which beat the AI's picks.
+    func editIcon(_ c: Chat) {
         hide()
         let file = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent("Library/Application Support/claude-swipe/chat-emoji.json")
+            .appendingPathComponent("Library/Application Support/claude-swipe/chat-icons.json")
         var data = (try? JSONSerialization.jsonObject(with: Data(contentsOf: file))) as? [String: Any] ?? [:]
         var overrides = data["overrides"] as? [String: String] ?? [:]
         let auto = data["auto"] as? [String: String] ?? [:]
 
         let alert = NSAlert()
-        alert.messageText = "Emoji for “\(c.title)”"
-        alert.informativeText = "Type or pick one emoji. The emoji picker opens with it; Control-Command-Space reopens it."
+        alert.messageText = "Topic icon for “\(c.title)”"
+        alert.informativeText = "Pick an icon, or use automatic to let the AI or the folder decide."
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
-        if overrides[c.id] != nil { alert.addButton(withTitle: "Remove my pick") }
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 28))
-        field.font = .systemFont(ofSize: 18)
-        field.stringValue = c.emoji ?? ""
-        alert.accessoryView = field
-        alert.layout()
-        alert.window.initialFirstResponder = field
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 240, height: 28), pullsDown: false)
+        popup.addItem(withTitle: "Use automatic")
+        popup.menu?.addItem(.separator())
+        for name in iconAllowlist.sorted() {
+            popup.addItem(withTitle: name)
+            popup.lastItem?.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
+        }
+        if let mine = overrides[c.id], iconAllowlist.contains(mine) { popup.selectItem(withTitle: mine) }
+        alert.accessoryView = popup
         NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            alert.window.makeFirstResponder(field)
-            NSApp.orderFrontCharacterPalette(nil)
-        }
-        let choice = alert.runModal()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        var newEmoji: String?
-        switch choice {
-        case .alertFirstButtonReturn:
-            guard let first = field.stringValue.trimmingCharacters(in: .whitespaces).first else { return }
-            newEmoji = String(first)
-            overrides[c.id] = newEmoji
-        case .alertThirdButtonReturn:
-            overrides[c.id] = nil
-            newEmoji = nil  // the refresh below fills in the AI or folder emoji
-        default:
-            return
-        }
+        let pick = popup.indexOfSelectedItem == 0 ? nil : popup.titleOfSelectedItem
+        overrides[c.id] = pick  // nil removes your pick; the refresh fills in the AI or folder icon
         data["overrides"] = overrides
         data["auto"] = auto
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let out = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted]) {
             try? out.write(to: file)
         }
-        if let i = store.chats.firstIndex(where: { $0.id == c.id }) { store.chats[i].emoji = newEmoji }
+        if let i = store.chats.firstIndex(where: { $0.id == c.id }), let p = pick { store.chats[i].icon = p }
         store.refresh()
     }
 
@@ -661,7 +716,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func bringUp(_ w: NSWindow) {
-        hide()
+        if w !== settingsWindow { hide() }  // Settings keeps the panel up; Welcome doesn't
         status.start()
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
@@ -677,7 +732,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 title: "ClaudeSwipe Settings", size: NSSize(width: 760, height: 580), resizable: true)
         }
         updateLoginItem()
-        bringUp(settingsWindow!)
+        let w = settingsWindow!
+        if !w.isVisible {
+            // Panel on the Settings window's screen (the mouse's on first open), then the
+            // window centred, moved left just enough to clear the panel.
+            let p = NSEvent.mouseLocation
+            let screen = w.screen ?? NSScreen.screens.first(where: { NSMouseInRect(p, $0.frame, false) }) ?? NSScreen.main!
+            showPanel(on: screen)
+            w.setFrameOrigin(settingsOrigin(window: w.frame.size, panel: panelTarget, visible: screen.visibleFrame))
+        } else if let screen = w.screen {
+            showPanel(on: screen)
+        }
+        bringUp(w)
+    }
+
+    // Shows the panel on a screen unless it's already up there.
+    func showPanel(on screen: NSScreen) {
+        if shown && screen.visibleFrame.contains(NSPoint(x: panelTarget.midX, y: panelTarget.midY)) { return }
+        show(on: screen)
+    }
+
+    // Settings dragged to another screen: the panel follows it.
+    func windowDidChangeScreen(_ n: Notification) {
+        guard let w = n.object as? NSWindow, w === settingsWindow, w.isVisible, let screen = w.screen else { return }
+        showPanel(on: screen)
     }
 
     func showWelcome() {
@@ -703,15 +781,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Count comes from the last refresh: chats without your own pick, or their distinct folders.
     func confirmRepick() {
         let p = Prefs.shared
-        let folder = p.emojiSource == "folder"
-        let rows = store.chats.filter { $0.own_emoji != true }
+        let folder = p.iconSource == "folder"
+        let rows = store.chats.filter { $0.own_icon != true }
         let n = folder ? Set(rows.map(\.folder)).count : rows.count
         let noun = folder ? (n == 1 ? "folder" : "folders") : (n == 1 ? "chat" : "chats")
         let alert = NSAlert()
-        alert.messageText = "Re-pick all emoji?"
+        alert.messageText = "Re-pick all topic icons?"
         alert.informativeText = folder
-            ? "ClaudeSwipe will ask \(p.modelName) to pick an emoji again for \(n) \(noun) with chats from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change."
-            : "ClaudeSwipe will ask \(p.modelName) to pick an emoji again for \(n) \(noun) from the last 7 days. This uses your Claude plan. Emoji you picked yourself will not change."
+            ? "ClaudeSwipe will ask \(p.modelName) to pick a topic icon again for \(n) \(noun) with chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change."
+            : "ClaudeSwipe will ask \(p.modelName) to pick a topic icon again for \(n) \(noun) from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change."
         alert.addButton(withTitle: "Re-pick")
         alert.addButton(withTitle: "Cancel")
         let go: (NSApplication.ModalResponse) -> Void = { [weak self] r in

@@ -10,7 +10,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -O -swift-version 5 -parse-as-library Sources/*.swift \
   -o "$APP/Contents/MacOS/ClaudeSwipe" -framework AppKit -framework SwiftUI -framework Carbon
-cp recent_chats.py "$APP/Contents/Resources/"
+cp recent_chats.py icons.json "$APP/Contents/Resources/"
 cp Info.plist "$APP/Contents/"
 # Fixed self-signed identity, so macOS keeps the Accessibility permission across rebuilds.
 # Falls back to ad-hoc if the certificate is missing.
