@@ -314,16 +314,19 @@ struct HeaderGlow: ViewModifier {
     }
 }
 
-// A circle in the state's colour (a tint of it), holding the topic symbol in that colour.
+// A circle in the state's colour holding the topic symbol. Tinted (Settings › Appearance ›
+// Icons): a pale tint with the symbol in the colour. Solid: the full colour with a white symbol.
 struct StateIcon: View {
     let symbol: String
     let color: Color
     let size: CGFloat
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var prefs = Prefs.shared
 
     var body: some View {
-        Circle().fill(color.opacity(scheme == .dark ? 0.18 : 0.14))
-            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(color))
+        let solid = prefs.solidIcons
+        Circle().fill(solid ? color : color.opacity(scheme == .dark ? 0.18 : 0.14))
+            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(solid ? .white : color))
             .frame(width: size, height: size)
     }
 }

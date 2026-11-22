@@ -44,6 +44,7 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Background: Solid / Frosted / Glass (picture tiles). Helper: Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass. (below macOS 26: Frosted blurs what's behind. Glass needs macOS 26 or later.)
 - See-through / How much of what's behind shows through your chats. Higher is harder to read over busy windows.
 - Density: Cozy / Compact. Helper: Cozy shows each chat's summary. Compact fits more chats on one line each.
+- Icons: Tinted / Solid. Helper: Solid fills each icon with its state's colour, so states stand out more.
 - Button: Reset to defaults
 - When macOS forces a solid panel: Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls. (Increase contrast gets the same line with its own name.)
 
