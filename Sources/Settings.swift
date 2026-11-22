@@ -338,7 +338,7 @@ struct SettingsView: View {
     }
 
     let panes: [(name: String, icon: String)] = [
-        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
+        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"), ("Guide", "questionmark.circle"),
     ]
 
     var body: some View {
@@ -376,6 +376,7 @@ struct SettingsView: View {
                     case "Cards": cards
                     case "Windows": windows
                     case "AI": ai
+                    case "Guide": guide
                     default: general
                     }
                 }
@@ -532,6 +533,39 @@ struct SettingsView: View {
              title: "Write the launch post", folder: "clients/acme",
              age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
              icon: "pencil", own_icon: nil)
+    }
+
+    // A short explainer: what the colours mean and a few things people miss.
+    var guide: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Group_ {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("What the colours mean").font(.system(size: 13, weight: .semibold))
+                    ForEach(statusOrder, id: \.self) { s in
+                        let st = statusStyle[s]!
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Circle().fill(st.color).frame(width: 12, height: 12).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                            Text(statusName[s] ?? s).font(.system(size: 13, weight: .medium)).frame(width: 110, alignment: .leading)
+                            Text(statusMeaning[s] ?? "").font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Text("Hover over a chat's icon to see its state.").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+            Group_ {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Good to know").font(.system(size: 13, weight: .semibold))
+                    Text("Right-click a chat to pick its topic icon yourself. Your pick always wins.")
+                    Text("Active is anything you touched in the last hour. Waiting splits the rest into today and older.")
+                    Text("Ready to clear only shows if you turn it on in AI.")
+                }
+                .font(.system(size: 13))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+        }
     }
 
     var windows: some View {
