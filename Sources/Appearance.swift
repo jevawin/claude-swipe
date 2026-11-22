@@ -25,7 +25,7 @@ struct RowMetrics {
     static func of(_ d: Density, scale s: CGFloat) -> RowMetrics {
         switch d {
         case .standard: return RowMetrics(icon: 32*s, title: 14*s, summary: 12.5*s, meta: 12*s, vpad: 13*s, spacing: 12*s, gap: 4*s)
-        case .cozy:     return RowMetrics(icon: 26*s, title: 14*s, summary: 12.5*s, meta: 12*s, vpad: 8*s, spacing: 10*s, gap: 2*s)
+        case .cozy:     return RowMetrics(icon: 28*s, title: 14*s, summary: 12.5*s, meta: 12*s, vpad: 8*s, spacing: 10*s, gap: 2*s)
         case .compact:  return RowMetrics(icon: 24*s, title: 14*s, summary: 0, meta: 12*s, vpad: 8*s, spacing: 10*s, gap: 0)
         }
     }
