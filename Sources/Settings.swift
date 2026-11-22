@@ -9,6 +9,8 @@ import SwiftUI
 
 // One place for every setting. Writes go straight to UserDefaults
 // (com.jevawin.claude-swipe); settings the script uses trigger a refresh.
+extension Notification.Name { static let edgeShadowChanged = Notification.Name("edgeShadowChanged") }
+
 final class Prefs: ObservableObject {
     static let shared = Prefs()
     private let d = UserDefaults.standard
@@ -24,7 +26,9 @@ final class Prefs: ObservableObject {
     }
     @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
     // A window shadow on the panel's left edge, so it reads as sitting above other windows.
-    @Published var edgeShadow: Bool { didSet { d.set(edgeShadow, forKey: "edgeShadow") } }
+    @Published var edgeShadow: Bool {
+        didSet { d.set(edgeShadow, forKey: "edgeShadow"); NotificationCenter.default.post(name: .edgeShadowChanged, object: nil) }
+    }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -448,7 +452,7 @@ struct SettingsView: View {
                 }
                 .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
                 Hairline()
-                Row(title: "Edge shadow", helper: "A shadow down the panel's left edge, so it stands out from the windows behind. Helps most with Solid.") {
+                Row(title: "Edge shadow", helper: "A shadow down the panel's left edge. Useful when the panel is solid or barely see-through, so it doesn't look like it blends into the window behind.") {
                     Toggle("Edge shadow", isOn: $prefs.edgeShadow).toggleStyle(.switch).labelsHidden()
                 }
             }
