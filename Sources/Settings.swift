@@ -16,9 +16,15 @@ final class Prefs: ObservableObject {
     private var pending: DispatchWorkItem?
 
     @Published var theme: String { didSet { d.set(theme, forKey: "theme"); applyTheme() } }
-    @Published var cardIcon: String { didSet { d.set(cardIcon, forKey: "cardIcon") } }
-    @Published var showEmoji: Bool { didSet { d.set(showEmoji, forKey: "showEmoji"); scriptChanged() } }
-    @Published var emojiSource: String { didSet { d.set(emojiSource, forKey: "emojiSource"); scriptChanged() } }
+    // The panel's see-through values, one set for both themes. Loaded through clampedToFloor.
+    @Published var appearance: AppearanceValues {
+        didSet {
+            d.set(appearance.opacity, forKey: "panelOpacity"); d.set(appearance.background.rawValue, forKey: "panelBackground")
+        }
+    }
+    @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
+    // Where topic icons come from: "subject" or "folder".
+    @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
     @Published var minimiseOthers: Bool { didSet { d.set(minimiseOthers, forKey: "minimiseOthers") } }
     // Percent to fade Done cards by. Capped at 80 so they stay readable.
@@ -28,8 +34,11 @@ final class Prefs: ObservableObject {
     // Model changes only affect new picks, so no refresh.
     @Published var aiModel: String { didSet { d.set(aiModel, forKey: "aiModel") } }
     @Published var aiSort: Bool { didSet { d.set(aiSort, forKey: "aiSort"); scriptChanged() } }
-    @Published var aiEmoji: Bool { didSet { d.set(aiEmoji, forKey: "aiEmoji"); scriptChanged() } }
+    @Published var aiIcon: Bool { didSet { d.set(aiIcon, forKey: "aiIcon"); scriptChanged() } }
     @Published var aiClear: Bool { didSet { d.set(aiClear, forKey: "aiClear"); scriptChanged() } }
+    // Reduce transparency or Increase contrast is on: the panel draws solid (display only;
+    // saved values are kept). Updated live when either system setting changes.
+    @Published var systemSolid = Prefs.readSystemSolid()
     @Published var loginOn = false  // mirrors SMAppService; set by AppDelegate.updateLoginItem
 
     var onboarded: Bool {
@@ -38,23 +47,36 @@ final class Prefs: ObservableObject {
     }
 
     init() {
+        migrateIconPrefs(d)
         d.register(defaults: [
-            "theme": "auto", "cardIcon": "status", "showEmoji": true, "emojiSource": "subject",
+            "theme": "auto", "iconSource": "subject",
+            "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
+            "density": Density.cozy.rawValue,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
-            "aiSort": false, "aiEmoji": false, "aiClear": false,
+            "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
-        cardIcon = d.string(forKey: "cardIcon") ?? "status"
-        showEmoji = d.bool(forKey: "showEmoji")
-        emojiSource = d.string(forKey: "emojiSource") ?? "subject"
+        appearance = clampedToFloor(AppearanceValues(
+            background: BackgroundStyle(rawValue: d.string(forKey: "panelBackground") ?? "") ?? defaultAppearance.background,
+            opacity: d.double(forKey: "panelOpacity")))
+        density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
+        iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
         doneFade = min(80, max(0, d.double(forKey: "doneFade")))
         showDone = d.bool(forKey: "showDone")
         aiModel = d.string(forKey: "aiModel") ?? "haiku"
         aiSort = d.bool(forKey: "aiSort")
-        aiEmoji = d.bool(forKey: "aiEmoji")
+        aiIcon = d.bool(forKey: "aiIcon")
         aiClear = d.bool(forKey: "aiClear")
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.systemSolid = Prefs.readSystemSolid() }
+    }
+
+    static func readSystemSolid() -> Bool {
+        let w = NSWorkspace.shared
+        return w.accessibilityDisplayShouldReduceTransparency || w.accessibilityDisplayShouldIncreaseContrast
     }
 
     // Coalesces several switches flipped at once (the welcome switch sets two) into one refresh.
@@ -70,16 +92,23 @@ final class Prefs: ObservableObject {
             : theme == "dark" ? NSAppearance(named: .darkAqua) : nil
     }
 
-    var pickEmoji: Bool { showEmoji && aiEmoji }
-    var anyAI: Bool { aiSort || aiClear || pickEmoji }
+    // Theme, density and the four background values back to their defaults.
+    func resetAppearance() {
+        theme = "auto"
+        appearance = defaultAppearance
+        density = .cozy
+    }
+
+    var pickIcon: Bool { aiIcon }
+    var anyAI: Bool { aiSort || aiClear || pickIcon }
     var modelName: String { aiModel == "sonnet" ? "Sonnet" : "Haiku" }
 
     // Flags for recent_chats.py. Every AI flag is opt-in, so none set means no requests.
     var scriptArgs: [String] {
-        var a = ["--model", aiModel, "--emoji-from", emojiSource]
+        var a = ["--model", aiModel, "--icon-from", iconSource]
         if aiSort { a.append("--sort") }
         if aiClear { a.append("--clear") }
-        if pickEmoji { a += ["--emoji", emojiSource] }
+        if pickIcon { a += ["--icon", iconSource] }
         return a
     }
 }
@@ -309,7 +338,7 @@ struct SettingsView: View {
     }
 
     let panes: [(name: String, icon: String)] = [
-        ("General", ""), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
+        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
     ]
 
     var body: some View {
@@ -343,6 +372,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(pane).font(.system(size: 18, weight: .semibold)).accessibilityAddTraits(.isHeader)
                     switch pane {
+                    case "Appearance": appearancePane
                     case "Cards": cards
                     case "Windows": windows
                     case "AI": ai
@@ -361,13 +391,6 @@ struct SettingsView: View {
     var general: some View {
         VStack(alignment: .leading, spacing: 14) {
         Group_ {
-            Row(title: "Theme") {
-                Picker("Theme", selection: $prefs.theme) {
-                    Text("Auto").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-            }
-            Hairline()
             Row(title: "Launch at login") {
                 Toggle("Launch at login", isOn: Binding(get: { prefs.loginOn }, set: { actions.setLogin($0) }))
                     .toggleStyle(.switch).labelsHidden()
@@ -381,6 +404,81 @@ struct SettingsView: View {
         }
     }
 
+    // The four background values are greyed out while macOS forces the panel solid.
+    var appearancePane: some View {
+        let solid = prefs.systemSolid
+        let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
+        return VStack(alignment: .leading, spacing: 14) {
+            if solid {
+                WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+                    ? "Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls."
+                    : "Increase contrast is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls.")
+            }
+            Group_ {
+                Row(title: "Theme") {
+                    Picker("Theme", selection: $prefs.theme) {
+                        Text("Auto").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+            }
+            Group_ {
+                tiles("Background", helper: glassAvailable ? "Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass."
+                                                           : "Frosted blurs what's behind. Glass needs macOS 26 or later.",
+                      BackgroundStyle.allCases, selected: look.background, name: { $0.rawValue.capitalized },
+                      set: { prefs.appearance.background = $0 },
+                      look: { var v = prefs.appearance; v.background = $0; return effective(v, solidRequired: false, glassAvailable: true) },
+                      disabled: { $0 == .glass && !glassAvailable })
+                    .disabled(solid).opacity(solid ? 0.5 : 1)
+                Hairline()
+                Row(title: "See-through", helper: "How much of what's behind shows through your chats. Higher is harder to read over busy windows.") {
+                    HStack(spacing: 8) {
+                        SliderPreview(values: { var v = prefs.appearance; v.opacity = 100 - $0; return v },
+                                      value: 100 - prefs.appearance.opacity, range: 0...(100 - opacityFloor))
+                        Slider(value: Binding(get: { 100 - prefs.appearance.opacity }, set: { prefs.appearance.opacity = 100 - $0 }),
+                               in: 0...(100 - opacityFloor), step: 1).frame(width: 130)
+                        Text("\(Int(100 - prefs.appearance.opacity))%").monospacedDigit()
+                            .foregroundStyle(Theme.secondary).frame(width: 38, alignment: .trailing)
+                    }
+                }
+                .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
+            }
+            Group_ {
+                tiles("Density", helper: "Cozy shows each chat's summary. Compact fits more chats on one line each.",
+                      Density.allCases, selected: prefs.density, name: { $0.rawValue.capitalized },
+                      set: { prefs.density = $0 }, look: { _ in look }, density: { $0 })
+            }
+            HStack {
+                Spacer()
+                Button("Reset to defaults") { prefs.resetAppearance() }.disabled(isDefault)
+            }
+        }
+    }
+
+    // A row of picture tiles under a title, one per choice.
+    func tiles<T: Hashable>(_ title: String, helper: String, _ all: [T], selected: T, name: @escaping (T) -> String,
+                            set: @escaping (T) -> Void, look: @escaping (T) -> AppearanceValues,
+                            density: ((T) -> Density)? = nil, disabled: @escaping (T) -> Bool = { _ in false }) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .medium))
+                Text(helper).font(.system(size: 11)).foregroundStyle(Theme.secondary)
+            }
+            HStack(spacing: 14) {
+                ForEach(all, id: \.self) { c in
+                    PictureTile(label: name(c), selected: selected == c, action: { set(c) }) {
+                        if let d = density?(c) { DensityPicture(density: d) }
+                        else { MiniPanel(values: look(c), density: prefs.density) }
+                    }
+                    .disabled(disabled(c)).opacity(disabled(c) ? 0.5 : 1)
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     var folders: [String] {
         var f = Array(Set(store.chats.map(\.folder))).sorted()
         if !prefs.homeFolder.isEmpty && !f.contains(prefs.homeFolder) { f.insert(prefs.homeFolder, at: 0) }
@@ -391,35 +489,21 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
-                Card(chat: sampleChat)
+                ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false)
+                    .background(GroupBackground(look: AppearanceValues(background: .solid, opacity: 100)))
                     .frame(maxWidth: 440)
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.bg))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
             }
             Group_ {
-                Row(title: "Card icon") {
-                    Picker("Card icon", selection: $prefs.cardIcon) {
-                        Text("Status first (emoji as a small badge)").tag("status")
-                        Text("Emoji first (status as a small badge)").tag("emoji")
-                    }
-                    .pickerStyle(.radioGroup).labelsHidden().fixedSize()
-                }
-                .disabled(!prefs.showEmoji)
-                .opacity(prefs.showEmoji ? 1 : 0.5)
-                Hairline()
-                Row(title: "Show emoji", helper: "Off: cards show the status icon on its own") {
-                    Toggle("Show emoji", isOn: $prefs.showEmoji).toggleStyle(.switch).labelsHidden()
-                }
-                Hairline()
-                Row(title: "Emoji from",
+                Row(title: "Topic icon from",
                     helper: "Claude picks these, so AI must be on. Right-click a chat to pick your own.") {
-                    Picker("Emoji from", selection: $prefs.emojiSource) {
+                    Picker("Topic icon from", selection: $prefs.iconSource) {
                         Text("Chat subject").tag("subject"); Text("Folder").tag("folder")
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
-                .disabled(!prefs.showEmoji)
                 Hairline()
                 Row(title: "Hide folder label for",
                     helper: "Most chats sit in one folder. Hide that folder's label to keep cards tidy.") {
@@ -447,7 +531,7 @@ struct SettingsView: View {
         Chat(id: "preview", status: "waiting", why: "Want me to send the draft to the team now?",
              title: "Write the launch post", folder: "clients/acme",
              age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
-             emoji: "✍️", own_emoji: nil)
+             icon: "pencil", own_icon: nil)
     }
 
     var windows: some View {
@@ -470,8 +554,8 @@ struct SettingsView: View {
                     Toggle("Sort unclear chats", isOn: $prefs.aiSort).toggleStyle(.switch).labelsHidden()
                 }
                 Hairline()
-                Row(title: "Let AI pick emoji", helper: "Off: only your own emoji picks show") {
-                    Toggle("Let AI pick emoji", isOn: $prefs.aiEmoji).toggleStyle(.switch).labelsHidden()
+                Row(title: "Pick a topic icon for each chat", helper: "Off: chats show their state icon, or your own pick") {
+                    Toggle("Pick a topic icon for each chat", isOn: $prefs.aiIcon).toggleStyle(.switch).labelsHidden()
                 }
                 Hairline()
                 Row(title: "Ready to clear section",
@@ -481,12 +565,12 @@ struct SettingsView: View {
             }
             .disabled(!ready)
             Group_ {
-                Row(title: "Re-pick all emoji",
-                    helper: "Changing the model or emoji source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay.") {
+                Row(title: "Re-pick all topic icons",
+                    helper: "Changing the model or icon source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay.") {
                     Button("Re-pick…") { actions.repick() }
                 }
             }
-            .disabled(!ready || !prefs.pickEmoji)
+            .disabled(!ready || !prefs.pickIcon)
         }
     }
 }
@@ -583,8 +667,8 @@ struct WelcomeView: View {
                 Hairline()
                 Row(title: "Use my Claude plan", helper: "Off until you turn it on. Pick the model and more in Settings › AI.") {
                     Toggle("Use my Claude plan", isOn: Binding(
-                        get: { prefs.aiSort && prefs.aiEmoji },
-                        set: { prefs.aiSort = $0; prefs.aiEmoji = $0 }))
+                        get: { prefs.aiSort && prefs.aiIcon },
+                        set: { prefs.aiSort = $0; prefs.aiIcon = $0 }))
                         .toggleStyle(.switch).labelsHidden()
                 }
                 .disabled(status.claude != .ready)
@@ -648,14 +732,14 @@ struct AIIntro: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sort unclear chats and pick emoji").font(.system(size: 15, weight: .semibold))
-            Text("Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick an emoji for each chat.")
+            Text("Sort unclear chats and pick topic icons").font(.system(size: 15, weight: .semibold))
+            Text("Sometimes ClaudeSwipe cannot tell if a chat needs you or is done. With this on, Claude reads your latest message and its last reply, and decides. It can also pick a topic icon for each chat.")
                 .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .top, spacing: 14) {
-                SortDemo(sorted: false, label: "Picture: a chat card marked unsure, with no emoji",
-                         caption: "Before: chat marked unsure, no emoji")
-                SortDemo(sorted: true, label: "Picture: the same card marked done, with an emoji",
-                         caption: "After: chat sorted, with an emoji")
+                SortDemo(sorted: false, label: "Picture: a chat marked unsure, with no topic icon",
+                         caption: "Before: chat marked unsure, no topic icon")
+                SortDemo(sorted: true, label: "Picture: the same chat marked done, with a topic icon",
+                         caption: "After: chat sorted, with a topic icon")
             }
             WarningBox(text: warning)
             PrivacyNote(text: "ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.")
@@ -665,7 +749,7 @@ struct AIIntro: View {
     }
 }
 
-// Before/after picture of one card: unsure and plain, then sorted with an emoji badge.
+// Before/after picture of one chat: unsure with its state icon, then sorted with a topic icon.
 struct SortDemo: View {
     let sorted: Bool
     let label: String
@@ -677,17 +761,7 @@ struct SortDemo: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(Theme.bg)
                 HStack(alignment: .top, spacing: 8) {
-                    RoundedRectangle(cornerRadius: 7).fill(st.color)
-                        .overlay(Image(systemName: st.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white))
-                        .overlay(alignment: .bottomTrailing) {
-                            if sorted {
-                                Circle().fill(Theme.cardHover).frame(width: 16, height: 16)
-                                    .overlay(Text("🧾").font(.system(size: 9)))
-                                    .overlay(Circle().stroke(Theme.card, lineWidth: 1.5))
-                                    .offset(x: 5, y: 5)
-                            }
-                        }
-                        .frame(width: 26, height: 26)
+                    StateIcon(symbol: sorted ? "banknote" : st.icon, color: st.color, size: 26)
                     VStack(alignment: .leading, spacing: 5) {
                         RoundedRectangle(cornerRadius: 2).fill(Theme.text.opacity(0.7)).frame(width: 70, height: 5)
                         RoundedRectangle(cornerRadius: 2).fill(Theme.border).frame(width: 46, height: 4)
@@ -758,5 +832,150 @@ struct Demo: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 6).fill(Theme.card))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(highlight ? Theme.brand : Theme.border, lineWidth: highlight ? 1.5 : 1))
+    }
+}
+
+// MARK: - Appearance pane pieces
+
+// A mini desktop with a mini panel on its right, drawn in the given style. Used by
+// the picture tiles and the slider previews. A sketch, not the real material.
+struct MiniPanel: View {
+    let values: AppearanceValues
+    var density: Density = .cozy
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        GeometryReader { g in
+            let dark = scheme == .dark
+            let w = g.size.width, h = g.size.height
+            let pw = w * 0.5
+            let window = VStack(alignment: .leading, spacing: 3) {
+                ForEach(0..<4, id: \.self) { _ in Capsule().fill(Color.black.opacity(0.55)).frame(height: 2.5) }
+            }
+            .padding(5)
+            .frame(width: w * 0.7, height: h * 0.62, alignment: .topLeading)
+            .background(Color.white)
+            .offset(x: w * 0.12, y: h * 0.18)
+            ZStack(alignment: .topLeading) {
+                // Desktop: a light window over a darker wallpaper, so see-through shows.
+                LinearGradient(colors: [Color(nsColor: hsl(210, 40, 55)), Color(nsColor: hsl(262, 35, 45))],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                window
+                // The panel: Frosted blurs everything behind it; Glass blurs only behind groups.
+                ZStack(alignment: .top) {
+                    if values.background == .frosted {
+                        ZStack(alignment: .topLeading) {
+                            LinearGradient(colors: [Color(nsColor: hsl(210, 40, 55)), Color(nsColor: hsl(262, 35, 45))],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                            window.offset(x: -(w - pw))
+                        }
+                        .blur(radius: 3)
+                        .clipped()
+                    }
+                    Rectangle().fill((dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
+                        .opacity(values.opacity / 100))
+                    VStack(spacing: density == .cozy ? 3 : 2) {
+                        ForEach(0..<(density == .cozy ? 3 : 5), id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(values.background == .glass ? (dark ? Color(white: 0.35) : Color(white: 0.92)).opacity(0.85)
+                                      : (dark ? Color(white: 0.19) : .white).opacity(groupFillAlpha(opacity: values.opacity, background: values.background)))
+                                .overlay(RoundedRectangle(cornerRadius: 2).stroke(values.background == .glass ? .white.opacity(0.8) : .clear, lineWidth: 0.5))
+                                .frame(height: density == .cozy ? 8 : 5)
+                        }
+                    }
+                    .padding(4)
+                }
+                .frame(width: pw, height: h)
+                .clipped()
+                .offset(x: w - pw)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+// The Density tiles: a close-up of the solid panel, so the row layout is the only
+// difference. Cozy: two rows with a title and a summary line. Compact: five one-line rows.
+struct DensityPicture: View {
+    let density: Density
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let dark = scheme == .dark
+        let ink = dark ? Color.white : Color.black
+        let cozy = density == .cozy
+        VStack(spacing: 0) {
+            ForEach(0..<(cozy ? 2 : 5), id: \.self) { i in
+                if i > 0 { Rectangle().fill(ink.opacity(0.12)).frame(height: 0.5) }
+                HStack(spacing: 4) {
+                    Circle().fill(Theme.brand.opacity(0.7)).frame(width: cozy ? 9 : 5, height: cozy ? 9 : 5)
+                    VStack(alignment: .leading, spacing: 2.5) {
+                        Capsule().fill(ink.opacity(0.75)).frame(width: 30, height: 2.5)
+                        if cozy { Capsule().fill(ink.opacity(0.35)).frame(width: 44, height: 2) }
+                    }
+                    Spacer(minLength: 0)
+                    Capsule().fill(ink.opacity(0.35)).frame(width: 8, height: 2)
+                }
+                .padding(.horizontal, 5)
+                .frame(height: cozy ? 20 : 8.4)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 4).fill(dark ? Color(white: 0.19) : .white))
+        .padding(4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+// An 84×54 picture with its name under it. The selected one gets a brand ring.
+struct PictureTile<Picture: View>: View {
+    let label: String
+    let selected: Bool
+    let action: () -> Void
+    @ViewBuilder let picture: () -> Picture
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                picture()
+                    .frame(width: 84, height: 54)
+                    .padding(2)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Theme.brand : .clear, lineWidth: 2))
+                Text(label).font(.system(size: 12, weight: selected ? .medium : .regular))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
+// A 64×42 preview showing the slider's current value. On hover it runs from min to
+// max and back, unless Reduce motion is on.
+struct SliderPreview: View {
+    let values: (Double) -> AppearanceValues
+    let value: Double
+    let range: ClosedRange<Double>
+    @LocalState private var hovering = false
+
+    var body: some View {
+        Group {
+            if hovering {
+                // A 2.4s loop: min, max, min.
+                TimelineView(.animation) { ctx in
+                    let t = (1 - cos(ctx.date.timeIntervalSinceReferenceDate * .pi / 1.2)) / 2
+                    MiniPanel(values: values(range.lowerBound + (range.upperBound - range.lowerBound) * t))
+                }
+            } else {
+                MiniPanel(values: values(value))
+            }
+        }
+        .frame(width: 64, height: 42)
+        .onHover { hovering = $0 && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     }
 }
