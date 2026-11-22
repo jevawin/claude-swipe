@@ -47,7 +47,7 @@ struct PanelTint: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            Rectangle().fill(Theme.bg.opacity(opacity / 100))
+            Rectangle().fill(Theme.panelBg.opacity(opacity / 100))
             if opacity < 100 {
                 let dark = scheme == .dark
                 // 160° in CSS terms: from the top left, down and slightly right.
