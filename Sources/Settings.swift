@@ -521,7 +521,8 @@ struct SettingsView: View {
                     Picker("Fade", selection: $prefs.fadeWhich) {
                         Text("Both").tag("both"); Text("Done").tag("done"); Text("Ready to clear").tag("clear"); Text("Neither").tag("none")
                     }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    // A menu, not segments: four segments squeezed the title and helper into a sliver.
+                    .pickerStyle(.menu).labelsHidden().fixedSize()
                 }
                 Hairline()
                 Row(title: "Fade amount",
