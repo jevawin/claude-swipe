@@ -263,6 +263,16 @@ struct PanelView: View {
         })
     }
 
+    // Done fades by Settings' Done fade. Ready to clear sits under Done and fades a step
+    // further, so the most settled chats look the quietest.
+    func sectionOpacity(_ key: String) -> Double {
+        switch key {
+        case "done": return 1 - prefs.doneFade / 100
+        case "clear": return 1 - min(80, prefs.doneFade + 15) / 100
+        default: return 1
+        }
+    }
+
     @ViewBuilder func section(_ sec: (key: String, label: String), _ items: [Chat]) -> some View {
         let collapsible = sec.key == "done"
         let names = folderNames
@@ -290,7 +300,7 @@ struct PanelView: View {
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, c in
                     ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
                             density: prefs.density, divider: i > 0, folderName: names[c.folder])
-                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
+                        .opacity(sectionOpacity(sec.key))
                         .contentShape(Rectangle())
                         .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
                         .onTapGesture { open(c) }
