@@ -147,7 +147,9 @@ let statusStyle: [String: (color: Color, icon: String)] = [
     "waiting": (Color(nsColor: hsl(38, 92, 50)), statusSymbol["waiting"]!),     // a question for you
     "blocked": (Color(nsColor: hsl(0, 72, 52)), statusSymbol["blocked"]!),      // needs a click to carry on
     "done": (Color(nsColor: hsl(120, 35, 42)), statusSymbol["done"]!),
-    "finished": (Color(nsColor: hsl(262, 45, 58)), statusSymbol["finished"]!),  // ready to archive or delete
+    // Ready to clear is a guess that a done chat is finished with, so it's a faded Done
+    // green rather than a colour of its own. Deeper in dark mode so the white symbol reads.
+    "finished": (themed(hsl(120, 18, 55), hsl(120, 13, 42)), statusSymbol["finished"]!),  // ready to archive or delete
     "stuck": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["stuck"]!),
     "unsure": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["unsure"]!),
 ]
@@ -158,8 +160,8 @@ let sections: [(key: String, label: String)] = [
     ("active", "Active"),
     ("today", "Waiting · today"),
     ("older", "Waiting · older"),
-    ("clear", "Ready to clear"),
     ("done", "Done"),
+    ("clear", "Ready to clear"),
 ]
 
 let statusName: [String: String] = [

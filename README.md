@@ -6,8 +6,8 @@ Chats are grouped as:
 
 - **Active**: anything you've touched in the last hour.
 - **Waiting · today** and **Waiting · older**: chats that need you, split by when you last touched them.
-- **Ready to clear**: done chats where the whole job is finished, so you can archive them. Only shown if you turn it on in Settings › AI.
 - **Done**: finished chats, collapsed.
+- **Ready to clear**: done chats where the whole job is finished, so you can archive them. Only shown if you turn it on in Settings › AI.
 
 Each card shows the chat's status, folder, a one-line summary and an emoji. The status tile tells you what the chat needs:
 
@@ -15,7 +15,7 @@ Each card shows the chat's status, folder, a one-line summary and an emoji. The 
 - Amber question mark: waiting for your answer.
 - Red cross: blocked, for example on a permission prompt. It needs a click to carry on.
 - Green tick: done.
-- Violet box: ready to clear.
+- Faded green: ready to clear. A done chat the AI thinks is finished with, so it sits under Done.
 - Grey: stuck or unsure.
 
 ## Install
