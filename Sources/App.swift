@@ -425,7 +425,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false  // flush to the edge, no shadow on the left
+        panel.hasShadow = Prefs.shared.edgeShadow  // off by default: flush to the edge, no shadow on the left
         // Glass has no panel material, so with See-through above 0 the gaps between groups are
         // part-transparent and scrolls there went to the window behind (Jamie, 19 Nov 2026).
         // Setting this explicitly is meant to make the whole frame take mouse and scroll
@@ -555,7 +555,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         debugLog("show")
         panel.setFrame(target.offsetBy(dx: width + 20, dy: 0), display: false)
         panel.alphaValue = 0
+        // Settings › Appearance › Edge shadow, read on every show so a change applies next time.
+        panel.hasShadow = Prefs.shared.edgeShadow
         panel.orderFrontRegardless()
+        panel.invalidateShadow()
         panel.makeKey()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18

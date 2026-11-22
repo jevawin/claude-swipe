@@ -23,6 +23,8 @@ final class Prefs: ObservableObject {
         }
     }
     @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
+    // A window shadow on the panel's left edge, so it reads as sitting above other windows.
+    @Published var edgeShadow: Bool { didSet { d.set(edgeShadow, forKey: "edgeShadow") } }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -51,7 +53,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.cozy.rawValue,
+            "density": Density.cozy.rawValue, "edgeShadow": false,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
@@ -60,6 +62,7 @@ final class Prefs: ObservableObject {
             background: BackgroundStyle(rawValue: d.string(forKey: "panelBackground") ?? "") ?? defaultAppearance.background,
             opacity: d.double(forKey: "panelOpacity")))
         density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
+        edgeShadow = d.bool(forKey: "edgeShadow")
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
@@ -97,6 +100,7 @@ final class Prefs: ObservableObject {
         theme = "auto"
         appearance = defaultAppearance
         density = .cozy
+        edgeShadow = false
     }
 
     var pickIcon: Bool { aiIcon }
@@ -408,7 +412,7 @@ struct SettingsView: View {
     var appearancePane: some View {
         let solid = prefs.systemSolid
         let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
-        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy && !prefs.edgeShadow
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
                 WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
@@ -443,6 +447,10 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
+                Hairline()
+                Row(title: "Edge shadow", helper: "A shadow down the panel's left edge, so it stands out from the windows behind. Helps most with Solid.") {
+                    Toggle("Edge shadow", isOn: $prefs.edgeShadow).toggleStyle(.switch).labelsHidden()
+                }
             }
             Group_ {
                 tiles("Density", helper: "Cozy shows each chat's summary. Compact fits more chats on one line each.",
