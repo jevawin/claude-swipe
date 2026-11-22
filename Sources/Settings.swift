@@ -535,12 +535,25 @@ struct SettingsView: View {
              icon: "pencil", own_icon: nil)
     }
 
-    // A short explainer: what the colours mean and a few things people miss.
+    // Settings › Guide "Good to know": a short bold title per topic, with bullets under it.
+    var guideTips: [(title: String, points: [String])] {[
+        ("Topic icons", ["Right-click a chat and pick 'Change topic icon…' to choose your own.",
+                         "Icons you choose stay put. Claude never replaces them."]),
+        ("Sections", ["'Active': chats you've worked in during the last hour.",
+                      "'Waiting': chats that need you, split into today and older.",
+                      "'Ready to clear' only appears if you turn it on in Settings › AI."]),
+    ]}
+
+    // A short explainer: what the icon colours mean and a few things people miss.
     var guide: some View {
         VStack(alignment: .leading, spacing: 14) {
             Group_ {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("What the colours mean").font(.system(size: 13, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What the icon colours mean").font(.system(size: 15, weight: .semibold))
+                        Text("The colour of each chat's icon shows its state. Hover over an icon to see it.")
+                            .font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                    }
                     ForEach(statusOrder, id: \.self) { s in
                         let st = statusStyle[s]!
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -550,19 +563,25 @@ struct SettingsView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    Text("Hover over a chat's icon to see its state.").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 12)
             }
             Group_ {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Good to know").font(.system(size: 13, weight: .semibold))
-                    Text("Right-click a chat to pick its topic icon yourself. Your pick always wins.")
-                    Text("Active is anything you touched in the last hour. Waiting splits the rest into today and older.")
-                    Text("Ready to clear only shows if you turn it on in AI.")
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Good to know").font(.system(size: 15, weight: .semibold))
+                    ForEach(guideTips, id: \.title) { tip in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(tip.title).font(.system(size: 13, weight: .semibold))
+                            ForEach(tip.points, id: \.self) { point in
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text("•").foregroundStyle(Theme.secondary)
+                                    Text(point).fixedSize(horizontal: false, vertical: true)
+                                }
+                                .font(.system(size: 13))
+                            }
+                        }
+                    }
                 }
-                .font(.system(size: 13))
-                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14).padding(.vertical, 12)
             }
         }
