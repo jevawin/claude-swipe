@@ -396,8 +396,15 @@ struct ChatRow: View {
 struct EdgeShadow: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        LinearGradient(colors: [.black.opacity(0), .black.opacity(scheme == .dark ? 0.45 : 0.2)],
-                       startPoint: .leading, endPoint: .trailing)
+        // Faint and wide like a macOS window shadow: most of it is a long, light tail.
+        let peak = scheme == .dark ? 0.28 : 0.12
+        LinearGradient(stops: [
+            .init(color: .black.opacity(0), location: 0),
+            .init(color: .black.opacity(peak * 0.12), location: 0.4),
+            .init(color: .black.opacity(peak * 0.35), location: 0.7),
+            .init(color: .black.opacity(peak * 0.7), location: 0.9),
+            .init(color: .black.opacity(peak), location: 1),
+        ], startPoint: .leading, endPoint: .trailing)
     }
 }
 
@@ -587,7 +594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // content is see-through and it's flush to the screen edge), so a separate click-through
     // window draws a soft gradient just left of the panel.
     var edgeShadowWindow: NSWindow?
-    let edgeShadowWidth: CGFloat = 22
+    let edgeShadowWidth: CGFloat = 40  // click-through, so the width costs nothing
 
     func updateEdgeShadow() {
         guard shown, Prefs.shared.edgeShadow else { edgeShadowWindow?.orderOut(nil); return }
