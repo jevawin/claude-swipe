@@ -263,12 +263,14 @@ struct PanelView: View {
         })
     }
 
-    // Done fades by Settings' Done fade. Ready to clear sits under Done and fades a step
-    // further, so the most settled chats look the quietest.
+    // Settings › Cards › Fade: which of Done and Ready to clear fade, by the fade amount.
+    // With both, Ready to clear fades a step further, so the most settled chats look quietest.
     func sectionOpacity(_ key: String) -> Double {
+        let w = prefs.fadeWhich
         switch key {
-        case "done": return 1 - prefs.doneFade / 100
-        case "clear": return 1 - min(80, prefs.doneFade + 15) / 100
+        case "done" where w == "both" || w == "done": return 1 - prefs.doneFade / 100
+        case "clear" where w == "both": return 1 - min(80, prefs.doneFade + 15) / 100
+        case "clear" where w == "clear": return 1 - prefs.doneFade / 100
         default: return 1
         }
     }
