@@ -142,17 +142,36 @@ enum Theme {
 
 // Status sets the card's tile (or its badge): colour, SF Symbol and a spoken name.
 // Symbol names live in statusSymbol (Appearance.swift).
-let statusStyle: [String: (color: Color, icon: String)] = [
-    "running": (Color(nsColor: hsl(210, 60, 52)), statusSymbol["running"]!),
-    "waiting": (Color(nsColor: hsl(38, 92, 50)), statusSymbol["waiting"]!),     // a question for you
-    "blocked": (Color(nsColor: hsl(0, 72, 52)), statusSymbol["blocked"]!),      // needs a click to carry on
-    "done": (Color(nsColor: hsl(120, 35, 42)), statusSymbol["done"]!),
-    // Ready to clear is a guess that a done chat is finished with, so it's a faded Done
-    // green rather than a colour of its own. Deeper in dark mode so the white symbol reads.
-    "finished": (themed(hsl(120, 18, 55), hsl(120, 13, 42)), statusSymbol["finished"]!),  // ready to archive or delete
-    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["stuck"]!),
-    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["unsure"]!),
+func hex(_ v: Int) -> NSColor {
+    NSColor(srgbRed: CGFloat(v >> 16 & 0xFF) / 255, green: CGFloat(v >> 8 & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+}
+
+// State colours. Light mode uses one set. Dark mode has two (Kris, 22 Nov 2026): the
+// tinted icon needs lighter, brighter colours to show on a dark or see-through panel,
+// while the solid icon keeps the light-mode fills so its white symbol stays readable.
+// Ready to clear is a guess that a done chat is finished with, so it's a quieter
+// version of Done's green rather than a colour of its own.
+private let lightState: [String: NSColor] = [
+    "running": hsl(210, 60, 52), "waiting": hsl(38, 92, 50), "blocked": hsl(0, 72, 52),
+    "done": hsl(120, 35, 42), "finished": hsl(120, 18, 55), "stuck": hsl(48, 4.8, 50), "unsure": hsl(48, 4.8, 50),
 ]
+private let darkTintState: [String: NSColor] = [
+    "running": hex(0x7DB5F2), "waiting": hex(0xFFC04D), "blocked": hex(0xFF7A7A),
+    "done": hex(0x6FD87A), "finished": hex(0x9DBF8F), "stuck": hex(0xBAB8AD), "unsure": hex(0xBAB8AD),
+]
+private let darkSolidState: [String: NSColor] = [
+    "running": hsl(210, 60, 52), "waiting": hsl(38, 92, 50), "blocked": hsl(0, 72, 52),
+    "done": hsl(120, 35, 42), "finished": hsl(120, 13, 42), "stuck": hex(0xA9A79C), "unsure": hex(0xA9A79C),
+]
+
+// Tinted icons (and anything else that shows a state colour) use statusStyle.
+let statusStyle: [String: (color: Color, icon: String)] = Dictionary(uniqueKeysWithValues: lightState.keys.map {
+    ($0, (themed(lightState[$0]!, darkTintState[$0]!), statusSymbol[$0]!))
+})
+// For a solid icon style: a full fill with a white symbol.
+let statusSolid: [String: Color] = Dictionary(uniqueKeysWithValues: lightState.keys.map {
+    ($0, themed(lightState[$0]!, darkSolidState[$0]!))
+})
 
 // Sections come from recent_chats.py: touched in the last hour, then not-done
 // chats split by today vs older, then everything done.
@@ -336,7 +355,7 @@ struct StateIcon: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Circle().fill(color.opacity(scheme == .dark ? 0.18 : 0.14))
+        Circle().fill(color.opacity(scheme == .dark ? 0.44 : 0.14))  // stronger in dark so it shows on see-through panels
             .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(color))
             .frame(width: size, height: size)
     }
