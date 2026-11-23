@@ -177,32 +177,28 @@ func hex(_ v: Int) -> NSColor {
     NSColor(srgbRed: CGFloat(v >> 16 & 0xFF) / 255, green: CGFloat(v >> 8 & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
 }
 
-// State colours. Light mode uses one set. Dark mode has two (Kris, 22 Nov 2026): the
-// tinted icon needs lighter, brighter colours to show on a dark or see-through panel,
-// while the solid icon keeps the light-mode fills so its white symbol stays readable.
+// State colours: one set, with a light and a dark version of each state (Jamie, 23 Nov 2026,
+// folding Kris's two dark sets into one). The dark versions are lighter and brighter so the
+// tinted icon shows on a dark or see-through panel. The solid icon always uses the light
+// version, so its white symbol stays readable in both modes.
 // Ready to clear is a guess that a done chat is finished with, so it's a quieter
 // version of Done's green rather than a colour of its own.
-private let lightState: [String: NSColor] = [
-    "running": hsl(210, 60, 52), "waiting": hsl(38, 92, 50), "blocked": hsl(0, 72, 52),
-    "done": hsl(120, 35, 42), "finished": hsl(120, 18, 55), "stuck": hsl(48, 4.8, 50), "unsure": hsl(48, 4.8, 50),
-]
-private let darkTintState: [String: NSColor] = [
-    "running": hex(0x7DB5F2), "waiting": hex(0xFFC04D), "blocked": hex(0xFF7A7A),
-    "done": hex(0x6FD87A), "finished": hex(0x9DBF8F), "stuck": hex(0xBAB8AD), "unsure": hex(0xBAB8AD),
-]
-private let darkSolidState: [String: NSColor] = [
-    "running": hsl(210, 60, 52), "waiting": hsl(38, 92, 50), "blocked": hsl(0, 72, 52),
-    "done": hsl(120, 35, 42), "finished": hsl(120, 13, 42), "stuck": hex(0xA9A79C), "unsure": hex(0xA9A79C),
+private let stateColours: [String: (light: NSColor, dark: NSColor)] = [
+    "running": (hsl(210, 60, 52), hex(0x7DB5F2)),
+    "waiting": (hsl(38, 92, 50), hex(0xFFC04D)),
+    "blocked": (hsl(0, 72, 52), hex(0xFF7A7A)),
+    "done": (hsl(120, 35, 42), hex(0x6FD87A)),
+    "finished": (hsl(120, 18, 55), hex(0x9DBF8F)),
+    "stuck": (hsl(48, 4.8, 50), hex(0xBAB8AD)),
+    "unsure": (hsl(48, 4.8, 50), hex(0xBAB8AD)),
 ]
 
 // Tinted icons (and anything else that shows a state colour) use statusStyle.
-let statusStyle: [String: (color: Color, icon: String)] = Dictionary(uniqueKeysWithValues: lightState.keys.map {
-    ($0, (themed(lightState[$0]!, darkTintState[$0]!), statusSymbol[$0]!))
-})
-// For a solid icon style: a full fill with a white symbol.
-let statusSolid: [String: Color] = Dictionary(uniqueKeysWithValues: lightState.keys.map {
-    ($0, themed(lightState[$0]!, darkSolidState[$0]!))
-})
+let statusStyle: [String: (color: Color, icon: String)] = stateColours.reduce(into: [:]) { out, e in
+    out[e.key] = (themed(e.value.light, e.value.dark), statusSymbol[e.key]!)
+}
+// For a solid icon style: a full fill with a white symbol, the light version in both modes.
+let statusSolid: [String: Color] = stateColours.mapValues { Color(nsColor: $0.light) }
 
 // Sections come from recent_chats.py: pinned chats, then touched in the last
 // hour, then not-done chats split by today vs older, then everything done.
