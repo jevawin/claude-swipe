@@ -521,7 +521,7 @@ struct SettingsView: View {
                       disabled: { $0 == .glass && !glassAvailable })
                     .disabled(solid).opacity(solid ? 0.5 : 1)
                 Hairline()
-                Row(title: "See-through", helper: "How much of what's behind shows through. Frosted keeps your chats solid; at 100% the panel is fully clear. Higher is harder to read over busy windows.") {
+                Row(title: "See-through", helper: "How much of what's behind shows through. Frosted keeps your chats solid and always blurs what's behind. Higher is harder to read over busy windows.") {
                     HStack(spacing: 8) {
                         SliderPreview(values: { var v = prefs.appearance; v.opacity = 100 - $0; return v },
                                       value: 100 - prefs.appearance.opacity, range: 0...(100 - opacityFloor))

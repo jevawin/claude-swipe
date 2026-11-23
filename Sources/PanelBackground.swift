@@ -25,13 +25,11 @@ let glassAvailable: Bool = {
 let frostedMaterial: NSVisualEffectView.Material = .hudWindow
 
 // Layer 1's blur: behind-window, full panel. Hidden unless the background is Frosted.
-// It fades with See-through, so 100% see-through is fully clear: no blur at all
-// (Jamie, 23 Nov 2026; before, the blur stayed at full strength and only the tint faded).
-// Unverified: that alphaValue on a behind-window NSVisualEffectView fades the blur smoothly.
-// Offscreen renders can't draw it; Jamie to check on screen.
+// The blur stays at full strength at every See-through; only the tint and the edge shine
+// fade (Jamie, 23 Nov 2026: tried fading the blur too, but Frosted should always blur).
+// The material's own light tint can't be removed with public API, so 100% isn't glass-clear.
 struct PanelMaterial: NSViewRepresentable {
     let visible: Bool
-    var alpha: Double = 1
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
@@ -41,10 +39,7 @@ struct PanelMaterial: NSViewRepresentable {
         return v
     }
 
-    func updateNSView(_ v: NSVisualEffectView, context: Context) {
-        v.isHidden = !visible || alpha <= 0
-        v.alphaValue = CGFloat(alpha)
-    }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) { v.isHidden = !visible }
 }
 
 // Layer 1's tint: the theme background at the chosen opacity. When see-through,

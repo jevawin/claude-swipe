@@ -42,7 +42,7 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 ## Settings › Appearance
 - Theme: Auto / Light / Dark
 - Background: Solid / Frosted / Glass (picture tiles). Helper: Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass. (below macOS 26: Frosted blurs what's behind. Glass needs macOS 26 or later.)
-- See-through / How much of what's behind shows through. Frosted keeps your chats solid; at 100% the panel is fully clear. Higher is harder to read over busy windows.
+- See-through / How much of what's behind shows through. Frosted keeps your chats solid and always blurs what's behind. Higher is harder to read over busy windows.
 - Edge shadow / A shadow down the panel's left edge. Useful when the panel is solid or barely see-through, so it doesn't look like it blends into the window behind.
 - Density: Default / Cozy / Compact. Helper: Default shows each chat's summary. Cozy is the same, tighter. Compact fits more chats on one line each.
 - Text size / Shrinks or grows text and spacing in any density. Slider 85% to 115%.

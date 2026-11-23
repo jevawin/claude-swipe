@@ -323,7 +323,7 @@ struct PanelView: View {
         }
         .foregroundStyle(Theme.text)
         .background(ZStack {
-            PanelMaterial(visible: look.background == .frosted, alpha: look.opacity / 100)
+            PanelMaterial(visible: look.background == .frosted)
             PanelTint(opacity: look.opacity, sheen: look.background == .frosted ? look.opacity / 100 : 1)
         })
     }
