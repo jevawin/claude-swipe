@@ -9,6 +9,8 @@ import SwiftUI
 
 // One place for every setting. Writes go straight to UserDefaults
 // (com.jevawin.claude-swipe); settings the script uses trigger a refresh.
+extension Notification.Name { static let edgeShadowChanged = Notification.Name("edgeShadowChanged") }
+
 final class Prefs: ObservableObject {
     static let shared = Prefs()
     private let d = UserDefaults.standard
@@ -30,6 +32,10 @@ final class Prefs: ObservableObject {
     @Published var linesCozy: Int { didSet { d.set(linesCozy, forKey: "summaryLinesCozy") } }
     // Icons: false = Tinted (pale circle, coloured symbol), true = Solid (full colour, white symbol).
     @Published var solidIcons: Bool { didSet { d.set(solidIcons, forKey: "solidIcons") } }
+    // A window shadow on the panel's left edge, so it reads as sitting above other windows.
+    @Published var edgeShadow: Bool {
+        didSet { d.set(edgeShadow, forKey: "edgeShadow"); NotificationCenter.default.post(name: .edgeShadowChanged, object: nil) }
+    }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -58,7 +64,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false,
+            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false, "edgeShadow": false,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
@@ -76,6 +82,7 @@ final class Prefs: ObservableObject {
         linesDefault = min(3, max(1, d.integer(forKey: "summaryLinesDefault")))
         linesCozy = min(3, max(1, d.integer(forKey: "summaryLinesCozy")))
         solidIcons = d.bool(forKey: "solidIcons")
+        edgeShadow = d.bool(forKey: "edgeShadow")
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
@@ -117,6 +124,7 @@ final class Prefs: ObservableObject {
         linesDefault = 2
         linesCozy = 1
         solidIcons = false
+        edgeShadow = false
     }
 
     func summaryLines(_ d: Density) -> Int { d == .cozy ? linesCozy : d == .standard ? linesDefault : 0 }
@@ -468,7 +476,7 @@ struct SettingsView: View {
     var appearancePane: some View {
         let solid = prefs.systemSolid
         let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
-        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .standard && prefs.textScale == 1.0 && !prefs.solidIcons
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .standard && prefs.textScale == 1.0 && !prefs.solidIcons && !prefs.edgeShadow
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
                 WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
@@ -503,6 +511,10 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
+                Hairline()
+                Row(title: "Edge shadow", helper: "A shadow down the panel's left edge. Useful when the panel is solid or barely see-through, so it doesn't look like it blends into the window behind.") {
+                    Toggle("Edge shadow", isOn: $prefs.edgeShadow).toggleStyle(.switch).labelsHidden()
+                }
             }
             Group_ {
                 tiles("Density", helper: "Default shows each chat's summary. Cozy is the same, tighter. Compact fits more chats on one line each.",

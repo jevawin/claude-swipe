@@ -397,6 +397,22 @@ struct ChatRow: View {
     }
 }
 
+// The edge shadow: clear on the left, darkest where it meets the panel.
+struct EdgeShadow: View {
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        // Faint and wide like a macOS window shadow: most of it is a long, light tail.
+        let peak = scheme == .dark ? 0.28 : 0.12
+        LinearGradient(stops: [
+            .init(color: .black.opacity(0), location: 0),
+            .init(color: .black.opacity(peak * 0.12), location: 0.4),
+            .init(color: .black.opacity(peak * 0.35), location: 0.7),
+            .init(color: .black.opacity(peak * 0.7), location: 0.9),
+            .init(color: .black.opacity(peak), location: 1),
+        ], startPoint: .leading, endPoint: .trailing)
+    }
+}
+
 // MARK: - Panel + triggers
 
 final class Panel: NSPanel {
@@ -423,6 +439,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let script = Bundle.main.path(forResource: "recent_chats", ofType: "py")!
         store = Store(script: script)
         Prefs.shared.applyTheme()
+        NotificationCenter.default.addObserver(forName: .edgeShadowChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.updateEdgeShadow()
+        }
         Prefs.shared.onScriptChange = { [weak self] in self?.store.refresh() }
 
         panel = Panel(contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless],
@@ -430,7 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false  // flush to the edge, no shadow on the left
+        panel.hasShadow = false  // flush to the edge; the optional edge shadow is its own window (edgeShadowWindow)
         // Glass has no panel material, so with See-through above 0 the gaps between groups are
         // part-transparent and scrolls there went to the window behind (Jamie, 19 Nov 2026).
         // Setting this explicitly is meant to make the whole frame take mouse and scroll
@@ -562,18 +581,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         panel.makeKey()
-        NSAnimationContext.runAnimationGroup { ctx in
+        NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.18
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().setFrame(target, display: true)
             panel.animator().alphaValue = 1
-        }
+        }, completionHandler: { [weak self] in self?.updateEdgeShadow() })
         shown = true
         mouseWasInside = target.insetBy(dx: -40, dy: -40).contains(NSEvent.mouseLocation)
         store.notice = nil
         store.query = ""
         store.focusTick += 1
         if Date().timeIntervalSince(store.lastRun) > 20 { store.refresh() }
+    }
+
+    // Settings › Appearance › Edge shadow. The panel's own window shadow barely shows (its
+    // content is see-through and it's flush to the screen edge), so a separate click-through
+    // window draws a soft gradient just left of the panel.
+    var edgeShadowWindow: NSWindow?
+    let edgeShadowWidth: CGFloat = 40  // click-through, so the width costs nothing
+
+    func updateEdgeShadow() {
+        guard shown, Prefs.shared.edgeShadow else { edgeShadowWindow?.orderOut(nil); return }
+        let f = panelTarget
+        let frame = NSRect(x: f.minX - edgeShadowWidth, y: f.minY, width: edgeShadowWidth, height: f.height)
+        if edgeShadowWindow == nil {
+            let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.hasShadow = false
+            w.ignoresMouseEvents = true
+            w.level = panel.level
+            w.collectionBehavior = panel.collectionBehavior
+            w.contentView = NSHostingView(rootView: EdgeShadow())
+            edgeShadowWindow = w
+        }
+        edgeShadowWindow?.setFrame(frame, display: true)
+        edgeShadowWindow?.orderFront(nil)
     }
 
     // The panel stays up the whole time Settings is open, so changes show live.
@@ -584,6 +628,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard shown, panelMayHide(settingsOpen: settingsOpen, explicit: explicit) else { return }
         debugLog("hide \(reason)")
         shown = false
+        edgeShadowWindow?.orderOut(nil)
         let f = panel.frame
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.14
