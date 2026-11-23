@@ -18,8 +18,10 @@ check("effectiveSolidIsOpaque", effective(AppearanceValues(background: .solid, o
 check("glassFallsBackToFrostedBelow26", effective(custom, solidRequired: false, glassAvailable: false)
   == AppearanceValues(background: .frosted, opacity: 30))
 check("effectiveKeepsGlass", effective(custom, solidRequired: false, glassAvailable: true) == custom)
-check("groupFillFollowsOpacity", groupFillAlpha(opacity: 100, background: .frosted) == 0.85
-  && groupFillAlpha(opacity: 0, background: .frosted) == 0.2 && groupFillAlpha(opacity: 50, background: .glass) == 0.16)
+check("groupFillFollowsOpacity", groupFillAlpha(opacity: 100, background: .solid) == 0.85
+  && groupFillAlpha(opacity: 50, background: .glass) == 0.16)
+check("frostedGroupsStaySolid", groupFillAlpha(opacity: 0, background: .frosted) == 1
+  && groupFillAlpha(opacity: 100, background: .frosted) == 1)
 let vis = CGRect(x: 0, y: 0, width: 1512, height: 944)
 let panel = CGRect(x: 1072, y: 0, width: 440, height: 944)
 check("settingsOriginCentredWhenClear", settingsOrigin(window: CGSize(width: 600, height: 580), panel: panel, visible: vis).x == 456)

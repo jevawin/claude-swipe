@@ -1,6 +1,6 @@
 // The panel's see-through layers:
 // 1. PanelMaterial (Frosted only) + PanelTint: blur and theme tint across the full width.
-// 2. GroupBackground: each group's fill (scaled by the same opacity), on Liquid Glass
+// 2. GroupBackground: each group's fill (solid on Frosted, scaled by opacity on Glass), on Liquid Glass
 //    when the background is Glass (macOS 26+).
 //
 // Measured 19 Nov 2026 (harness over a text backdrop, macOS 27): every public material
@@ -25,6 +25,9 @@ let glassAvailable: Bool = {
 let frostedMaterial: NSVisualEffectView.Material = .hudWindow
 
 // Layer 1's blur: behind-window, full panel. Hidden unless the background is Frosted.
+// The blur stays at full strength at every See-through; only the tint and the edge shine
+// fade (Jamie, 23 Nov 2026: tried fading the blur too, but Frosted should always blur).
+// The material's own light tint can't be removed with public API, so 100% isn't glass-clear.
 struct PanelMaterial: NSViewRepresentable {
     let visible: Bool
 
@@ -43,6 +46,7 @@ struct PanelMaterial: NSViewRepresentable {
 // a light rim on the left edge and a soft shine in the top left.
 struct PanelTint: View {
     let opacity: Double
+    var sheen: Double = 1  // scales the rim and shine; Frosted fades them out towards 100% see-through
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -51,10 +55,10 @@ struct PanelTint: View {
             if opacity < 100 {
                 let dark = scheme == .dark
                 // 160° in CSS terms: from the top left, down and slightly right.
-                LinearGradient(stops: [.init(color: .white.opacity(dark ? 0.10 : 0.55), location: 0),
+                LinearGradient(stops: [.init(color: .white.opacity((dark ? 0.10 : 0.55) * sheen), location: 0),
                                        .init(color: .white.opacity(0), location: 0.35)],
                                startPoint: UnitPoint(x: 0.33, y: 0), endPoint: UnitPoint(x: 0.67, y: 1))
-                Rectangle().fill(Color.white.opacity(dark ? 0.16 : 0.75)).frame(width: 1)
+                Rectangle().fill(Color.white.opacity((dark ? 0.16 : 0.75) * sheen)).frame(width: 1)
             }
         }
         .allowsHitTesting(false)

@@ -324,7 +324,7 @@ struct PanelView: View {
         .foregroundStyle(Theme.text)
         .background(ZStack {
             PanelMaterial(visible: look.background == .frosted)
-            PanelTint(opacity: look.opacity)
+            PanelTint(opacity: look.opacity, sheen: look.background == .frosted ? look.opacity / 100 : 1)
         })
     }
 
@@ -409,8 +409,9 @@ struct StateIcon: View {
 
     var body: some View {
         let solid = prefs.solidIcons
-        // Dark mode: the tint is stronger so it shows on see-through panels (Kris, 22 Nov 2026).
-        Circle().fill(solid ? (solidColor ?? color) : color.opacity(scheme == .dark ? 0.44 : 0.14))
+        // Tint strength: Kris raised dark to 0.44 (22 Nov 2026); Jamie found both too faint
+        // (23 Nov 2026), so 0.55 dark and 0.20 light. Picked by eye on an offscreen render.
+        Circle().fill(solid ? (solidColor ?? color) : color.opacity(scheme == .dark ? 0.55 : 0.20))
             .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(solid ? .white : color))
             .frame(width: size, height: size)
     }

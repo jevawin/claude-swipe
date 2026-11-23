@@ -64,11 +64,13 @@ func effective(_ v: AppearanceValues, solidRequired: Bool, glassAvailable: Bool)
     return v
 }
 
-// Each group's own fill, scaled by the same opacity as the panel tint, so See-through
-// at 0 leaves only the blur or glass. Glass groups start thinner (32%, as in the spec).
+// Each group's own fill. Glass scales it with the panel tint, so See-through at 100%
+// leaves only the glass; Glass groups start thinner (32%, as in the spec).
 func groupFillAlpha(opacity: Double, background: BackgroundStyle) -> Double {
-    // Solid and Frosted: groups are near-white at full paint and never fade below a
-    // floor, so they still lift off the panel at 100% see-through (Kris, 22 Nov 2026).
+    // Frosted: only the panel behind is frosted; the chat groups stay fully solid at any
+    // See-through (Jamie, 23 Nov 2026).
+    if background == .frosted { return 1 }
+    // Solid: near-white at full paint, with a floor (Kris, 22 Nov 2026).
     if background == .glass { return (0.32 * opacity).rounded() / 100 }
     return max(20, (0.85 * opacity).rounded()) / 100  // whole percent
 }
