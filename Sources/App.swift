@@ -397,7 +397,7 @@ struct ChatRow: View {
     var folderName: String? = nil  // shortFolders' name for chat.folder; nil shows the last folder
     @ObservedObject var prefs = Prefs.shared
 
-    var folder: String? { chat.folder != prefs.homeFolder ? chat.folder : nil }
+    var folder: String? { prefs.hidesLabel(chat.folder) ? nil : chat.folder }
 
     var icon: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!

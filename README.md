@@ -49,7 +49,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 
 - **General**: launch at login, and a button to show the welcome screen again.
 - **Appearance**: theme (auto, light or dark); background (Solid, Frosted, or Glass on macOS 26 and later); how see-through the panel is; and density (Cozy shows each chat's summary, Compact fits more chats on one line each). Reduce transparency or Increase contrast in macOS forces Solid.
-- **Cards**: whether topic icons come from the chat's subject or its folder, a folder whose label to hide (most people keep most chats in one folder), and how faint Done chats are.
+- **Cards**: whether topic icons come from the chat's subject or its folder, which folders' labels to hide (most people keep most chats in one or two folders) or a switch to hide them all, and how faint Done chats are.
 - **Windows**: minimise other Claude windows when you open a chat. Hold Command or Option while you click a chat to flip this setting for that one click.
 - **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick a topic icon for each chat, and the Ready to clear section. A Re-pick button asks again for every chat's topic icon.
 
