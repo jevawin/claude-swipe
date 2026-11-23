@@ -28,6 +28,8 @@ final class Prefs: ObservableObject {
     // Summary lines per preset (Compact has none).
     @Published var linesDefault: Int { didSet { d.set(linesDefault, forKey: "summaryLinesDefault") } }
     @Published var linesCozy: Int { didSet { d.set(linesCozy, forKey: "summaryLinesCozy") } }
+    // Icons: false = Tinted (pale circle, coloured symbol), true = Solid (full colour, white symbol).
+    @Published var solidIcons: Bool { didSet { d.set(solidIcons, forKey: "solidIcons") } }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -56,7 +58,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1,
+            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
@@ -73,6 +75,7 @@ final class Prefs: ObservableObject {
         textScale = min(1.15, max(0.85, d.double(forKey: "textScale")))
         linesDefault = min(3, max(1, d.integer(forKey: "summaryLinesDefault")))
         linesCozy = min(3, max(1, d.integer(forKey: "summaryLinesCozy")))
+        solidIcons = d.bool(forKey: "solidIcons")
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
@@ -113,6 +116,7 @@ final class Prefs: ObservableObject {
         textScale = 1.0
         linesDefault = 2
         linesCozy = 1
+        solidIcons = false
     }
 
     func summaryLines(_ d: Density) -> Int { d == .cozy ? linesCozy : d == .standard ? linesDefault : 0 }
@@ -464,7 +468,7 @@ struct SettingsView: View {
     var appearancePane: some View {
         let solid = prefs.systemSolid
         let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
-        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .standard && prefs.textScale == 1.0
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .standard && prefs.textScale == 1.0 && !prefs.solidIcons
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
                 WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
@@ -522,6 +526,13 @@ struct SettingsView: View {
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
                 .disabled(prefs.density == .compact).opacity(prefs.density == .compact ? 0.5 : 1)
+                Hairline()
+                Row(title: "Icons", helper: "Solid fills each icon with its state's colour, so states stand out more.") {
+                    Picker("Icons", selection: $prefs.solidIcons) {
+                        Text("Tinted").tag(false); Text("Solid").tag(true)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
             }
             HStack {
                 Spacer()

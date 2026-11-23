@@ -46,6 +46,7 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Density: Default / Cozy / Compact. Helper: Default shows each chat's summary. Cozy is the same, tighter. Compact fits more chats on one line each.
 - Text size / Shrinks or grows text and spacing in any density. Slider 85% to 115%.
 - Summary lines: 1 / 2 / 3. Helper: How much of each chat's summary shows. (Compact: Compact shows no summary.) Remembered separately for Default and Cozy.
+- Icons: Tinted / Solid. Helper: Solid fills each icon with its state's colour, so states stand out more.
 - Button: Reset to defaults
 - When macOS forces a solid panel: Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls. (Increase contrast gets the same line with its own name.)
 
