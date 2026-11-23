@@ -23,6 +23,11 @@ final class Prefs: ObservableObject {
         }
     }
     @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
+    // Text size for rows, 0.85...1.15 of each preset's sizes.
+    @Published var textScale: Double { didSet { d.set(textScale, forKey: "textScale") } }
+    // Summary lines per preset (Compact has none).
+    @Published var linesDefault: Int { didSet { d.set(linesDefault, forKey: "summaryLinesDefault") } }
+    @Published var linesCozy: Int { didSet { d.set(linesCozy, forKey: "summaryLinesCozy") } }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -51,7 +56,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.cozy.rawValue,
+            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
@@ -59,7 +64,15 @@ final class Prefs: ObservableObject {
         appearance = clampedToFloor(AppearanceValues(
             background: BackgroundStyle(rawValue: d.string(forKey: "panelBackground") ?? "") ?? defaultAppearance.background,
             opacity: d.double(forKey: "panelOpacity")))
-        density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
+        // Before 22 Nov 2026 "cozy" was the roomy preset, now called Default.
+        if !d.bool(forKey: "densityRenamed") {
+            if d.string(forKey: "density") == "cozy" { d.set(Density.standard.rawValue, forKey: "density") }
+            d.set(true, forKey: "densityRenamed")
+        }
+        density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .standard
+        textScale = min(1.15, max(0.85, d.double(forKey: "textScale")))
+        linesDefault = min(3, max(1, d.integer(forKey: "summaryLinesDefault")))
+        linesCozy = min(3, max(1, d.integer(forKey: "summaryLinesCozy")))
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
@@ -96,8 +109,13 @@ final class Prefs: ObservableObject {
     func resetAppearance() {
         theme = "auto"
         appearance = defaultAppearance
-        density = .cozy
+        density = .standard
+        textScale = 1.0
+        linesDefault = 2
+        linesCozy = 1
     }
+
+    func summaryLines(_ d: Density) -> Int { d == .cozy ? linesCozy : d == .standard ? linesDefault : 0 }
 
     var pickIcon: Bool { aiIcon }
     var anyAI: Bool { aiSort || aiClear || pickIcon }
@@ -446,7 +464,7 @@ struct SettingsView: View {
     var appearancePane: some View {
         let solid = prefs.systemSolid
         let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
-        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .standard && prefs.textScale == 1.0
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
                 WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
@@ -483,9 +501,27 @@ struct SettingsView: View {
                 .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
             }
             Group_ {
-                tiles("Density", helper: "Cozy shows each chat's summary. Compact fits more chats on one line each.",
-                      Density.allCases, selected: prefs.density, name: { $0.rawValue.capitalized },
+                tiles("Density", helper: "Default shows each chat's summary. Cozy is the same, tighter. Compact fits more chats on one line each.",
+                      Density.allCases, selected: prefs.density, name: { $0.label },
                       set: { prefs.density = $0 }, look: { _ in look }, density: { $0 })
+                Hairline()
+                Row(title: "Text size", helper: "Shrinks or grows text and spacing in any density.") {
+                    HStack(spacing: 8) {
+                        Slider(value: $prefs.textScale, in: 0.85...1.15, step: 0.05).frame(width: 130)
+                        Text("\(Int((prefs.textScale * 100).rounded()))%").monospacedDigit()
+                            .foregroundStyle(Theme.secondary).frame(width: 44, alignment: .trailing)
+                    }
+                }
+                Hairline()
+                Row(title: "Summary lines", helper: prefs.density == .compact ? "Compact shows no summary." : "How much of each chat's summary shows.") {
+                    Picker("Summary lines", selection: Binding(
+                        get: { prefs.density == .cozy ? prefs.linesCozy : prefs.linesDefault },
+                        set: { if prefs.density == .cozy { prefs.linesCozy = $0 } else { prefs.linesDefault = $0 } })) {
+                        Text("1").tag(1); Text("2").tag(2); Text("3").tag(3)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                .disabled(prefs.density == .compact).opacity(prefs.density == .compact ? 0.5 : 1)
             }
             HStack {
                 Spacer()
@@ -879,7 +915,7 @@ struct Demo: View {
 // the picture tiles and the slider previews. A sketch, not the real material.
 struct MiniPanel: View {
     let values: AppearanceValues
-    var density: Density = .cozy
+    var density: Density = .standard
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -912,13 +948,13 @@ struct MiniPanel: View {
                     }
                     Rectangle().fill((dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
                         .opacity(values.opacity / 100))
-                    VStack(spacing: density == .cozy ? 3 : 2) {
-                        ForEach(0..<(density == .cozy ? 3 : 5), id: \.self) { _ in
+                    VStack(spacing: density == .compact ? 2 : 3) {
+                        ForEach(0..<(density == .standard ? 3 : density == .cozy ? 4 : 5), id: \.self) { _ in
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(values.background == .glass ? (dark ? Color(white: 0.35) : Color(white: 0.92)).opacity(0.85)
                                       : (dark ? Color(white: 0.19) : .white).opacity(groupFillAlpha(opacity: values.opacity, background: values.background)))
                                 .overlay(RoundedRectangle(cornerRadius: 2).stroke(values.background == .glass ? .white.opacity(0.8) : .clear, lineWidth: 0.5))
-                                .frame(height: density == .cozy ? 8 : 5)
+                                .frame(height: density == .standard ? 8 : density == .cozy ? 6.5 : 5)
                         }
                     }
                     .padding(4)
@@ -935,7 +971,7 @@ struct MiniPanel: View {
 }
 
 // The Density tiles: a close-up of the solid panel, so the row layout is the only
-// difference. Cozy: two rows with a title and a summary line. Compact: five one-line rows.
+// difference. Default: two rows with a summary line. Cozy: three tighter ones. Compact: five one-line rows.
 struct DensityPicture: View {
     let density: Density
     @Environment(\.colorScheme) private var scheme
@@ -943,12 +979,13 @@ struct DensityPicture: View {
     var body: some View {
         let dark = scheme == .dark
         let ink = dark ? Color.white : Color.black
-        let cozy = density == .cozy
+        let cozy = density != .compact
+        let tight = density == .cozy
         VStack(spacing: 0) {
-            ForEach(0..<(cozy ? 2 : 5), id: \.self) { i in
+            ForEach(0..<(density == .standard ? 2 : tight ? 3 : 5), id: \.self) { i in
                 if i > 0 { Rectangle().fill(ink.opacity(0.12)).frame(height: 0.5) }
                 HStack(spacing: 4) {
-                    Circle().fill(Theme.brand.opacity(0.7)).frame(width: cozy ? 9 : 5, height: cozy ? 9 : 5)
+                    Circle().fill(Theme.brand.opacity(0.7)).frame(width: tight ? 7 : cozy ? 9 : 5, height: tight ? 7 : cozy ? 9 : 5)
                     VStack(alignment: .leading, spacing: 2.5) {
                         Capsule().fill(ink.opacity(0.75)).frame(width: 30, height: 2.5)
                         if cozy { Capsule().fill(ink.opacity(0.35)).frame(width: 44, height: 2) }
@@ -957,7 +994,7 @@ struct DensityPicture: View {
                     Capsule().fill(ink.opacity(0.35)).frame(width: 8, height: 2)
                 }
                 .padding(.horizontal, 5)
-                .frame(height: cozy ? 20 : 8.4)
+                .frame(height: density == .standard ? 20 : tight ? 14 : 8.4)
             }
         }
         .background(RoundedRectangle(cornerRadius: 4).fill(dark ? Color(white: 0.19) : .white))

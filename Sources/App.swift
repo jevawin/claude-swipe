@@ -343,46 +343,48 @@ struct ChatRow: View {
     var icon: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
         return StateIcon(symbol: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist),
-                         color: st.color, size: density == .cozy ? 32 : 24)
+                         color: st.color, size: m.icon)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(statusName[chat.status] ?? "Unsure")
     }
 
+    var m: RowMetrics { RowMetrics.of(density, scale: prefs.textScale) }
+
     var summary: some View {
-        Text(chat.why).font(.system(size: 12.5)).foregroundStyle(Theme.panelSecondary).lineLimit(2)
+        Text(chat.why).font(.system(size: m.summary)).foregroundStyle(Theme.panelSecondary).lineLimit(prefs.summaryLines(density))
     }
 
     var body: some View {
         Group {
-            if density == .cozy {
-                HStack(alignment: .center, spacing: 12) {
+            if density != .compact {
+                HStack(alignment: .center, spacing: m.spacing) {
                     icon
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    VStack(alignment: .leading, spacing: m.gap) {
+                        Text(chat.title).font(.system(size: m.title, weight: .semibold)).lineLimit(1)
                         if !chat.why.isEmpty { summary }
                     }
                     Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: m.gap) {
                         Text(ageText(chat.engaged))
                         if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                     }
-                    .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
+                    .font(.system(size: m.meta)).foregroundStyle(Theme.panelSecondary)
                 }
-                .padding(.vertical, 13)
+                .padding(.vertical, m.vpad)
             } else {
-                HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: m.spacing) {
                     icon
                     HStack(spacing: 8) {
-                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        Text(chat.title).font(.system(size: m.title, weight: .semibold)).lineLimit(1)
                         Spacer(minLength: 8)
                         Group {
                             if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                             Text(ageText(chat.engaged))
                         }
-                        .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
+                        .font(.system(size: m.meta)).foregroundStyle(Theme.panelSecondary)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, m.vpad)
             }
         }
         .padding(.horizontal, 12)
