@@ -1,6 +1,6 @@
 // The panel's see-through layers:
 // 1. PanelMaterial (Frosted only) + PanelTint: blur and theme tint across the full width.
-// 2. GroupBackground: each group's fill (scaled by the same opacity), on Liquid Glass
+// 2. GroupBackground: each group's fill (solid on Frosted, scaled by opacity on Glass), on Liquid Glass
 //    when the background is Glass (macOS 26+).
 //
 // Measured 19 Nov 2026 (harness over a text backdrop, macOS 27): every public material
@@ -25,8 +25,13 @@ let glassAvailable: Bool = {
 let frostedMaterial: NSVisualEffectView.Material = .hudWindow
 
 // Layer 1's blur: behind-window, full panel. Hidden unless the background is Frosted.
+// It fades with See-through, so 100% see-through is fully clear: no blur at all
+// (Jamie, 23 Nov 2026; before, the blur stayed at full strength and only the tint faded).
+// Unverified: that alphaValue on a behind-window NSVisualEffectView fades the blur smoothly.
+// Offscreen renders can't draw it; Jamie to check on screen.
 struct PanelMaterial: NSViewRepresentable {
     let visible: Bool
+    var alpha: Double = 1
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
@@ -36,13 +41,17 @@ struct PanelMaterial: NSViewRepresentable {
         return v
     }
 
-    func updateNSView(_ v: NSVisualEffectView, context: Context) { v.isHidden = !visible }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {
+        v.isHidden = !visible || alpha <= 0
+        v.alphaValue = CGFloat(alpha)
+    }
 }
 
 // Layer 1's tint: the theme background at the chosen opacity. When see-through,
 // a light rim on the left edge and a soft shine in the top left.
 struct PanelTint: View {
     let opacity: Double
+    var sheen: Double = 1  // scales the rim and shine; Frosted fades them out towards 100% see-through
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -51,10 +60,10 @@ struct PanelTint: View {
             if opacity < 100 {
                 let dark = scheme == .dark
                 // 160° in CSS terms: from the top left, down and slightly right.
-                LinearGradient(stops: [.init(color: .white.opacity(dark ? 0.10 : 0.55), location: 0),
+                LinearGradient(stops: [.init(color: .white.opacity((dark ? 0.10 : 0.55) * sheen), location: 0),
                                        .init(color: .white.opacity(0), location: 0.35)],
                                startPoint: UnitPoint(x: 0.33, y: 0), endPoint: UnitPoint(x: 0.67, y: 1))
-                Rectangle().fill(Color.white.opacity(dark ? 0.16 : 0.75)).frame(width: 1)
+                Rectangle().fill(Color.white.opacity((dark ? 0.16 : 0.75) * sheen)).frame(width: 1)
             }
         }
         .allowsHitTesting(false)
