@@ -51,6 +51,8 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Preview
 - Topic icon from: Chat subject / Folder. Helper: Claude picks these, so AI must be on. Right-click a chat to pick your own.
 - Hide folder label for: None (plus folder names). Helper: Most chats sit in one folder. Hide that folder's label to keep cards tidy.
+- Linked chats: Indent / Ring. Helper: Chats started from another chat. Indent puts them under it. Ring gives related chats the same coloured ring.
+- In the panel, a side session whose parent isn't listed right above it: "from <parent title>". Tooltip: "Started from <parent title>".
 
 ## Settings › Windows
 - The same "Jump to the right window" block as Welcome step 2 (title, body, pictures, needs line), with the switch named "Minimise other Claude windows".

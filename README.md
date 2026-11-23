@@ -18,7 +18,12 @@ Each card shows the chat's status, folder, a one-line summary and an emoji. The 
 - Violet box: ready to clear.
 - Grey: stuck or unsure.
 
-A chat started from another one (a side session) gets a coloured ring round its icon, the same colour as the chat that started it and any other side sessions from it. Each family of linked chats gets its own colour. Chats with no links have no outline.
+A chat started from another one (a side session) shows its link in one of two ways. Pick which in Settings › Cards › Linked chats:
+
+- **Indent** (default): the side session sits under the chat that started it, joined by a line. If the two are in different sections, or the parent isn't listed, the row says "from <parent>" instead.
+- **Ring**: every chat in the family gets the same coloured ring round its icon. Each family gets its own colour.
+
+A chat you detached (moved to top level) shows as a plain chat in both.
 
 ## Install
 
@@ -44,7 +49,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 ## Settings
 
 - **General**: theme (auto, light or dark), launch at login, and a button to show the welcome screen again.
-- **Cards**: whether the status or the emoji is the big icon, whether to show emoji at all, whether emoji come from the chat's subject or its folder, and a folder whose label to hide (most people keep most chats in one folder).
+- **Cards**: whether the status or the emoji is the big icon, whether to show emoji at all, whether emoji come from the chat's subject or its folder, a folder whose label to hide (most people keep most chats in one folder), and how linked chats show (Indent or Ring).
 - **Windows**: minimise other Claude windows when you open a chat. Hold Option while you click a chat to flip this setting for that one click.
 - **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick emoji, and the Ready to clear section. A Re-pick button asks again for every chat's emoji.
 

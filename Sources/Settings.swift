@@ -23,6 +23,7 @@ final class Prefs: ObservableObject {
         }
     }
     @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
+    @Published var linkStyle: LinkStyle { didSet { d.set(linkStyle.rawValue, forKey: "linkStyle") } }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
@@ -51,7 +52,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.cozy.rawValue,
+            "density": Density.cozy.rawValue, "linkStyle": LinkStyle.indent.rawValue,
             "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
@@ -60,6 +61,7 @@ final class Prefs: ObservableObject {
             background: BackgroundStyle(rawValue: d.string(forKey: "panelBackground") ?? "") ?? defaultAppearance.background,
             opacity: d.double(forKey: "panelOpacity")))
         density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
+        linkStyle = LinkStyle(rawValue: d.string(forKey: "linkStyle") ?? "") ?? .indent
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
@@ -489,7 +491,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
-                ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false)
+                VStack(spacing: 0) {
+                    ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false,
+                            spot: prefs.linkStyle == .indent ? TreeSpot(hasKids: true) : nil)
+                    ChatRow(chat: sampleChild, selected: false, density: prefs.density, divider: true,
+                            spot: prefs.linkStyle == .indent ? TreeSpot(depth: 1) : nil)
+                }
                     .background(GroupBackground(look: AppearanceValues(background: .solid, opacity: 100)))
                     .frame(maxWidth: 440)
                     .padding(12)
@@ -514,6 +521,14 @@ struct SettingsView: View {
                     .labelsHidden().frame(maxWidth: 220)
                 }
                 Hairline()
+                Row(title: "Linked chats",
+                    helper: "Chats started from another chat. Indent puts them under it. Ring gives related chats the same coloured ring.") {
+                    Picker("Linked chats", selection: $prefs.linkStyle) {
+                        Text("Indent").tag(LinkStyle.indent); Text("Ring").tag(LinkStyle.ring)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Hairline()
                 Row(title: "Fade done chats",
                     helper: "Done chats show fainter so open work stands out. 80% at most, so they stay readable.") {
                     HStack(spacing: 8) {
@@ -530,8 +545,15 @@ struct SettingsView: View {
     var sampleChat: Chat {
         Chat(id: "preview", status: "waiting", why: "Want me to send the draft to the team now?",
              title: "Write the launch post", folder: "clients/acme",
-             age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
-             icon: "pencil", own_icon: nil)
+             age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: "preview", cwd: nil,
+             icon: "pencil", own_icon: nil, family: "preview", familyColour: 0)
+    }
+
+    var sampleChild: Chat {
+        Chat(id: "preview-child", status: "running", why: "Checking the links in the draft.",
+             title: "Check the links", folder: "clients/acme",
+             age: 120, engaged: 120, section: "today", app: "desktop", desktop_id: "preview-child", cwd: nil,
+             icon: "link", own_icon: nil, parent: "preview", family: "preview", familyColour: 0)
     }
 
     var windows: some View {

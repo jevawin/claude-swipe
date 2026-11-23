@@ -14,6 +14,10 @@ import Foundation
 enum BackgroundStyle: String, CaseIterable { case solid, frosted, glass }
 enum Density: String, CaseIterable { case cozy, compact }
 
+// How linked chats (side sessions) look. Indent: under their parent (Jamie's pick).
+// Ring: a shared coloured ring round the state icon (Kristina's pick). 23 Nov 2026.
+enum LinkStyle: String, CaseIterable { case indent, ring }
+
 struct AppearanceValues: Equatable {
     var background: BackgroundStyle
     var opacity: Double  // percent of paint: panel tint and group fill, opacityFloor...100

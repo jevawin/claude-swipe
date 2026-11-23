@@ -1,4 +1,4 @@
-// Plain checks for Sources/Appearance.swift. Run with tests/run.sh.
+// Plain checks for Sources/Appearance.swift and Sources/LinkedChats.swift. Run with tests/run.sh.
 import CoreGraphics
 import Foundation
 
@@ -58,5 +58,17 @@ check("shortFoldersUnique", sf["personal/acme"] == "personal/acme" && sf["client
   && sf["clients/bookmygarage"] == "bookmygarage" && sf["clients"] == "clients" && sf["~/Developer"] == "Developer")
 check("shortFoldersDeeper", sf["a/x/acme"] == "x/acme")
 check("shortFoldersWorktree", sf["personal/claude-swipe @main"] == "claude-swipe @main" && sf["personal/claude-swipe"] == "claude-swipe")
+// Linked chats, Indent layout. Items are (id, parent), newest first.
+typealias L = (id: String, parent: String?)
+func tree(_ xs: [L]) -> [(String, TreeSpot)] { treeOrder(xs, id: { $0.id }, node: { $0.id }, parent: { $0.parent }).map { ($0.item.id, $0.spot) } }
+let t1 = tree([("kid", "mum"), ("x", nil), ("mum", nil)])
+check("treeChildUnderParent", t1.map(\.0) == ["mum", "kid", "x"])  // the busy child pulls its parent up
+check("treeSpots", t1[0].1 == TreeSpot(depth: 0, guides: [], last: true, hasKids: true) && t1[1].1 == TreeSpot(depth: 1, guides: [], last: true, hasKids: false))
+check("treeParentNotListedStaysTop", tree([("kid", "gone"), ("x", nil)]).map { $0.1.depth } == [0, 0])
+let t2 = tree([("a", nil), ("b", "a"), ("b1", "b"), ("c", "a")])
+check("treeGrandchild", t2.map(\.0) == ["a", "b", "b1", "c"] && t2.map { $0.1.depth } == [0, 1, 2, 1])
+check("treeGuideRunsPastGrandchild", t2[2].1.guides == [true] && !t2[1].1.last && t2[3].1.last)
+check("treeLoopShowsEachOnce", Set(tree([("p", "q"), ("q", "p")]).map(\.0)) == ["p", "q"])
+check("treeSelfParent", tree([("s", "s")]).map { $0.1.depth } == [0])
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")
