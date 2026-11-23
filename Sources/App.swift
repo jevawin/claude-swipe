@@ -15,12 +15,13 @@ struct Chat: Codable, Identifiable, Hashable {
     let folder: String
     let age: Double
     let engaged: Double
-    let section: String
+    var section: String
     let app: String
     let desktop_id: String?
     let cwd: String?
     var icon: String?     // topic SF Symbol name; only names in icons.json are shown
     var own_icon: Bool?   // your own pick decides the icon (counted for Re-pick)
+    var pinned: Bool?
 }
 
 // The SF Symbol names topic icons may use (icons.json in Resources, shared with recent_chats.py).
@@ -176,9 +177,10 @@ let statusSolid: [String: Color] = Dictionary(uniqueKeysWithValues: lightState.k
     ($0, themed(lightState[$0]!, darkSolidState[$0]!))
 })
 
-// Sections come from recent_chats.py: touched in the last hour, then not-done
-// chats split by today vs older, then everything done.
+// Sections come from recent_chats.py: pinned chats, then touched in the last
+// hour, then not-done chats split by today vs older, then everything done.
 let sections: [(key: String, label: String)] = [
+    ("pinned", "Pinned"),
     ("active", "Active"),
     ("today", "Waiting · today"),
     ("older", "Waiting · older"),
@@ -214,6 +216,7 @@ struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
     let editIcon: (Chat) -> Void
+    let togglePin: (Chat) -> Void
     let openSettings: () -> Void
     @ObservedObject private var prefs = Prefs.shared
     @FocusState private var searchFocused: Bool
@@ -340,7 +343,10 @@ struct PanelView: View {
                         .contentShape(Rectangle())
                         .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
                         .onTapGesture { open(c) }
-                        .contextMenu { Button("Change topic icon…") { editIcon(c) } }
+                        .contextMenu {
+                            Button(c.pinned == true ? "Unpin" : "Pin") { togglePin(c) }
+                            Button("Change topic icon…") { editIcon(c) }
+                        }
                 }
             }
             .background(GroupBackground(look: look))
@@ -512,6 +518,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.contentView = NSHostingView(rootView: PanelView(
             store: store, open: { [weak self] in self?.open($0) },
             editIcon: { [weak self] in self?.editIcon($0) },
+            togglePin: { [weak self] in self?.togglePin($0) },
             openSettings: { [weak self] in self?.openSettings() }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -797,6 +804,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try? out.write(to: file)
         }
         if let i = store.chats.firstIndex(where: { $0.id == c.id }), let p = pick { store.chats[i].icon = p }
+        store.refresh()
+    }
+
+    // Right-click > Pin / Unpin. Saves session ids to pinned.json "pinned"; the
+    // script puts those chats in the Pinned section and never in Done.
+    func togglePin(_ c: Chat) {
+        let file = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/claude-swipe/pinned.json")
+        var data = (try? JSONSerialization.jsonObject(with: Data(contentsOf: file))) as? [String: Any] ?? [:]
+        var pins = data["pinned"] as? [String] ?? []
+        let pin = !pins.contains(c.id)
+        if pin { pins.append(c.id) } else { pins.removeAll { $0 == c.id } }
+        data["pinned"] = pins
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let out = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted]) {
+            try? out.write(to: file)
+        }
+        // Move it now; the refresh puts an unpinned chat back in its own section.
+        if let i = store.chats.firstIndex(where: { $0.id == c.id }) {
+            store.chats[i].pinned = pin
+            if pin { store.chats[i].section = "pinned" }
+        }
         store.refresh()
     }
 
