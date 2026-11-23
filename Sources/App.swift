@@ -15,12 +15,22 @@ struct Chat: Codable, Identifiable, Hashable {
     let folder: String
     let age: Double
     let engaged: Double
-    let section: String
+    var section: String
     let app: String
     let desktop_id: String?
     let cwd: String?
     var icon: String?     // topic SF Symbol name; only names in icons.json are shown
     var own_icon: Bool?   // your own pick decides the icon (counted for Re-pick)
+    var pinned: Bool?
+    var parent: String?   // desktop id of the chat this one was started from
+    var family: String?   // top of its side-session chain; set only when 2+ listed chats share it
+    var familyColour: Int?  // index into ChatRow.familyPalette, set by Store.assignFamilyColours
+    var parent_title: String?  // the parent's title, for "from <parent>" when it isn't listed above
+}
+
+// The Indent layout of linked chats (treeOrder) lives in Sources/LinkedChats.swift.
+func treeOrder(_ items: [Chat]) -> [(chat: Chat, spot: TreeSpot)] {
+    treeOrder(items, id: \.id, node: \.desktop_id, parent: \.parent).map { ($0.item, $0.spot) }
 }
 
 // The SF Symbol names topic icons may use (icons.json in Resources, shared with recent_chats.py).
@@ -77,9 +87,27 @@ final class Store: ObservableObject {
 
     private func apply(_ r: Result<[Chat], Error>) {
         switch r {
-        case .success(let c): chats = c; error = nil
+        case .success(var c): Store.assignFamilyColours(&c); chats = c; error = nil
         case .failure(let e): error = "\(e)"
         }
+    }
+
+    // Linked-chat families take colours in palette order, so the first few on screen never look
+    // alike. A family keeps its colour while it's listed (remembered across launches); a new
+    // family takes the first colour no listed family has. Past the palette's end, colours repeat.
+    static func assignFamilyColours(_ chats: inout [Chat]) {
+        let key = "familyColours", n = ChatRow.familyPalette.count
+        var families: [String] = []
+        for c in chats { if let f = c.family, !families.contains(f) { families.append(f) } }
+        let saved = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        var colour: [String: Int] = [:], used = Set<Int>()
+        for f in families { if let i = saved[f], i < n, !used.contains(i) { colour[f] = i; used.insert(i) } }
+        for f in families where colour[f] == nil {
+            let i = (0..<n).first { !used.contains($0) } ?? colour.count % n
+            colour[f] = i; used.insert(i)
+        }
+        UserDefaults.standard.set(colour, forKey: key)
+        for i in chats.indices { chats[i].familyColour = chats[i].family.flatMap { colour[$0] } }
     }
 
     static func run(_ script: String, _ args: [String]) -> Result<[Chat], Error> {
@@ -124,6 +152,9 @@ func themed(_ light: NSColor, _ dark: NSColor) -> Color {
 
 enum Theme {
     static let bg = themed(hsl(48, 33.3, 97.1), hsl(60, 2.7, 14.5))         // --bg-100
+    // The panel behind the groups: a few steps darker than bg in light mode, so white
+    // groups stand out. Dark mode unchanged.
+    static let panelBg = themed(hsl(45, 22, 92.5), hsl(60, 2.7, 14.5))
     static let text = themed(hsl(60, 2.6, 7.6), hsl(48, 33.3, 97.1))        // --text-100
     static let secondary = themed(hsl(51, 3.1, 43.7), hsl(48, 4.8, 59.2))   // --text-400
     static let border = themed(hsl(51, 16.5, 84.5), hsl(50, 9, 73.7).withAlphaComponent(0.15))
@@ -142,25 +173,55 @@ enum Theme {
 
 // Status sets the card's tile (or its badge): colour, SF Symbol and a spoken name.
 // Symbol names live in statusSymbol (Appearance.swift).
-let statusStyle: [String: (color: Color, icon: String)] = [
-    "running": (Color(nsColor: hsl(210, 60, 52)), statusSymbol["running"]!),
-    "waiting": (Color(nsColor: hsl(38, 92, 50)), statusSymbol["waiting"]!),     // a question for you
-    "blocked": (Color(nsColor: hsl(0, 72, 52)), statusSymbol["blocked"]!),      // needs a click to carry on
-    "done": (Color(nsColor: hsl(120, 35, 42)), statusSymbol["done"]!),
-    "finished": (Color(nsColor: hsl(262, 45, 58)), statusSymbol["finished"]!),  // ready to archive or delete
-    "stuck": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["stuck"]!),
-    "unsure": (Color(nsColor: hsl(48, 4.8, 50)), statusSymbol["unsure"]!),
+func hex(_ v: Int) -> NSColor {
+    NSColor(srgbRed: CGFloat(v >> 16 & 0xFF) / 255, green: CGFloat(v >> 8 & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
+}
+
+// State colours: one set, with a light and a dark version of each state (Jamie, 23 Nov 2026,
+// folding Kris's two dark sets into one). The dark versions are lighter and brighter so the
+// tinted icon shows on a dark or see-through panel. The solid icon always uses the light
+// version, so its white symbol stays readable in both modes.
+// Ready to clear is a guess that a done chat is finished with, so it's a quieter
+// version of Done's green rather than a colour of its own.
+private let stateColours: [String: (light: NSColor, dark: NSColor)] = [
+    "running": (hsl(210, 60, 52), hex(0x7DB5F2)),
+    "waiting": (hsl(38, 92, 50), hex(0xFFC04D)),
+    "blocked": (hsl(0, 72, 52), hex(0xFF7A7A)),
+    "done": (hsl(120, 35, 42), hex(0x6FD87A)),
+    "finished": (hsl(120, 18, 55), hex(0x9DBF8F)),
+    "stuck": (hsl(48, 4.8, 50), hex(0xBAB8AD)),
+    "unsure": (hsl(48, 4.8, 50), hex(0xBAB8AD)),
 ]
 
-// Sections come from recent_chats.py: touched in the last hour, then not-done
-// chats split by today vs older, then everything done.
+// Tinted icons (and anything else that shows a state colour) use statusStyle.
+let statusStyle: [String: (color: Color, icon: String)] = stateColours.reduce(into: [:]) { out, e in
+    out[e.key] = (themed(e.value.light, e.value.dark), statusSymbol[e.key]!)
+}
+// For a solid icon style: a full fill with a white symbol, the light version in both modes.
+let statusSolid: [String: Color] = stateColours.mapValues { Color(nsColor: $0.light) }
+
+// Sections come from recent_chats.py: pinned chats, then touched in the last
+// hour, then not-done chats split by today vs older, then everything done.
 let sections: [(key: String, label: String)] = [
+    ("pinned", "Pinned"),
     ("active", "Active"),
     ("today", "Waiting · today"),
     ("older", "Waiting · older"),
-    ("clear", "Ready to clear"),
     ("done", "Done"),
+    ("clear", "Ready to clear"),
 ]
+
+// One line on each state, for the icon tooltip and Settings › Guide.
+let statusMeaning: [String: String] = [
+    "running": "Claude is working on it.",
+    "waiting": "Claude asked you something or wants a reply.",
+    "blocked": "Needs a click from you to carry on, often a permission prompt.",
+    "done": "Claude finished its turn. There may still be more to do.",
+    "finished": "The AI thinks the whole job is finished, so you can archive it. A guess, so check first.",
+    "stuck": "A prompt went in, but no reply has come back for a while.",
+    "unsure": "ClaudeSwipe couldn't tell what state this chat is in.",
+]
+let statusOrder = ["running", "waiting", "blocked", "done", "finished", "stuck", "unsure"]
 
 let statusName: [String: String] = [
     "running": "Running", "waiting": "Waiting for you", "blocked": "Blocked", "done": "Done",
@@ -178,6 +239,7 @@ struct PanelView: View {
     @ObservedObject var store: Store
     let open: (Chat) -> Void
     let editIcon: (Chat) -> Void
+    let togglePin: (Chat) -> Void
     let openSettings: () -> Void
     @ObservedObject private var prefs = Prefs.shared
     @FocusState private var searchFocused: Bool
@@ -194,7 +256,12 @@ struct PanelView: View {
     }
 
     // What Return opens: the first match in section order.
-    var firstMatch: Chat? { sections.flatMap { s in filtered.filter { $0.section == s.key } }.first }
+    var firstMatch: Chat? { sections.flatMap { s in arranged(filtered.filter { $0.section == s.key }) }.first?.chat }
+
+    // A section's rows in display order: as listed, or as a tree in the Indent layout.
+    func arranged(_ items: [Chat]) -> [(chat: Chat, spot: TreeSpot?)] {
+        prefs.linkStyle == .indent ? treeOrder(items).map { ($0.chat, $0.spot) } : items.map { ($0, nil) }
+    }
 
     // Short folder names, worked out across every chat so they don't change while searching.
     var folderNames: [String: String] { shortFolders(store.chats.map(\.folder)) }
@@ -261,6 +328,18 @@ struct PanelView: View {
         })
     }
 
+    // Settings › Cards › Fade: which of Done and Ready to clear fade, by the fade amount.
+    // With both, Ready to clear fades a step further, so the most settled chats look quietest.
+    func sectionOpacity(_ key: String) -> Double {
+        let w = prefs.fadeWhich
+        switch key {
+        case "done" where w == "both" || w == "done": return 1 - prefs.doneFade / 100
+        case "clear" where w == "both": return 1 - min(80, prefs.doneFade + 15) / 100
+        case "clear" where w == "clear": return 1 - prefs.doneFade / 100
+        default: return 1
+        }
+    }
+
     @ViewBuilder func section(_ sec: (key: String, label: String), _ items: [Chat]) -> some View {
         let collapsible = sec.key == "done"
         let names = folderNames
@@ -285,14 +364,18 @@ struct PanelView: View {
         .accessibilityAddTraits(.isHeader)
         if open_ {
             VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, c in
+                ForEach(Array(arranged(items).enumerated()), id: \.element.chat.id) { i, row in
+                    let c = row.chat
                     ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
-                            density: prefs.density, divider: i > 0, folderName: names[c.folder])
-                        .opacity(sec.key == "done" ? 1 - prefs.doneFade / 100 : 1)
+                            density: prefs.density, divider: i > 0, folderName: names[c.folder], spot: row.spot)
+                        .opacity(sectionOpacity(sec.key))
                         .contentShape(Rectangle())
                         .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
                         .onTapGesture { open(c) }
-                        .contextMenu { Button("Change topic icon…") { editIcon(c) } }
+                        .contextMenu {
+                            Button(c.pinned == true ? "Unpin" : "Pin") { togglePin(c) }
+                            Button("Change topic icon…") { editIcon(c) }
+                        }
                 }
             }
             .background(GroupBackground(look: look))
@@ -314,16 +397,21 @@ struct HeaderGlow: ViewModifier {
     }
 }
 
-// A circle in the state's colour (a tint of it), holding the topic symbol in that colour.
+// A circle in the state's colour holding the topic symbol. Tinted (Settings › Appearance ›
+// Icons): a pale tint with the symbol in the colour. Solid: the full colour with a white symbol.
 struct StateIcon: View {
     let symbol: String
     let color: Color
     let size: CGFloat
+    var solidColor: Color? = nil  // the Solid style's fill (statusSolid); falls back to color
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var prefs = Prefs.shared
 
     var body: some View {
-        Circle().fill(color.opacity(scheme == .dark ? 0.18 : 0.14))
-            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(color))
+        let solid = prefs.solidIcons
+        // Dark mode: the tint is stronger so it shows on see-through panels (Kris, 22 Nov 2026).
+        Circle().fill(solid ? (solidColor ?? color) : color.opacity(scheme == .dark ? 0.44 : 0.14))
+            .overlay(Image(systemName: symbol).font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(solid ? .white : color))
             .frame(width: size, height: size)
     }
 }
@@ -336,59 +424,159 @@ struct ChatRow: View {
     let density: Density
     let divider: Bool
     var folderName: String? = nil  // shortFolders' name for chat.folder; nil shows the last folder
+    var spot: TreeSpot? = nil      // set in the Indent layout of linked chats
     @ObservedObject var prefs = Prefs.shared
 
-    var folder: String? { chat.folder != prefs.homeFolder ? chat.folder : nil }
+    var iconSize: CGFloat { m.icon }
+    var indentStep: CGFloat { iconSize / 2 + 12 }
+    var ring: Bool { prefs.linkStyle == .ring }
+    // Indent layout, top level, but started from another chat: say which one.
+    var fromTitle: String? {
+        guard let s = spot, s.depth == 0, chat.parent != nil else { return nil }
+        return chat.parent_title
+    }
+
+    var folder: String? { prefs.hidesLabel(chat.folder) ? nil : chat.folder }
 
     var icon: some View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
         return StateIcon(symbol: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist),
-                         color: st.color, size: density == .cozy ? 32 : 24)
+                         color: st.color, size: m.icon, solidColor: statusSolid[chat.status])
+            .overlay { if ring, let c = familyColor { Circle().strokeBorder(c, lineWidth: 2.5) } }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+            .accessibilityLabel((statusName[chat.status] ?? "Unsure") + linkLabel)
+            .help("\(statusName[chat.status] ?? "Unsure"): \(statusMeaning[chat.status] ?? "")")
     }
 
+    var linkLabel: String {
+        if ring { return chat.family == nil ? "" : ", linked chat" }
+        if let s = spot, s.depth > 0 { return ", started from the chat above" }
+        if let t = fromTitle { return ", started from \(t)" }
+        return ""
+    }
+
+    // "↳ from <parent>", one line, under the title.
+    func fromLine(_ t: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.turn.down.right").font(.system(size: 9.5, weight: .semibold)).accessibilityHidden(true)
+            Text("from \(t)").lineLimit(1).truncationMode(.tail)
+        }
+        .font(.system(size: m.meta - 0.5)).foregroundStyle(Theme.panelSecondary)
+        .help("Started from \(t)")
+    }
+
+    // The lines joining a child to its parent: an elbow from the parent's icon, plus
+    // straight lines for any ancestor whose later children are still to come.
+    func treeLines(_ s: TreeSpot, _ size: CGSize) -> Path {
+        let mid = size.height / 2
+        func x(_ level: Int) -> CGFloat { 12 + CGFloat(level) * indentStep + iconSize / 2 }
+        var p = Path()
+        for (k, on) in s.guides.enumerated() where on {
+            p.move(to: CGPoint(x: x(k), y: 0)); p.addLine(to: CGPoint(x: x(k), y: size.height))
+        }
+        if s.depth > 0 {
+            let px = x(s.depth - 1), r: CGFloat = 6
+            p.move(to: CGPoint(x: px, y: 0))
+            if !s.last { p.addLine(to: CGPoint(x: px, y: size.height)); p.move(to: CGPoint(x: px, y: 0)) }
+            p.addLine(to: CGPoint(x: px, y: mid - r))
+            p.addQuadCurve(to: CGPoint(x: px + r, y: mid), control: CGPoint(x: px, y: mid))
+            p.addLine(to: CGPoint(x: x(s.depth) - iconSize / 2 - 4, y: mid))
+        }
+        if s.hasKids {  // a stub from under this row's icon down to its first child
+            p.move(to: CGPoint(x: x(s.depth), y: mid + iconSize / 2 + 3)); p.addLine(to: CGPoint(x: x(s.depth), y: size.height))
+        }
+        return p
+    }
+
+    var m: RowMetrics { RowMetrics.of(density, scale: prefs.textScale) }
+
     var summary: some View {
-        Text(chat.why).font(.system(size: 12.5)).foregroundStyle(Theme.panelSecondary).lineLimit(2)
+        Text(chat.why).font(.system(size: m.summary)).foregroundStyle(Theme.panelSecondary).lineLimit(prefs.summaryLines(density))
+    }
+
+    // Linked chats (a chat and the side sessions started from it) share a border
+    // ring round the state icon. Store.assignFamilyColours picks which one. Ordered so
+    // neighbours contrast, and kept away from the status colours (blue, amber, red, green, purple).
+    static let familyPalette: [NSColor] = [
+        0xEE1D52,  // raspberry
+        0x0FA37F,  // jade (greener than sky, so the two don't blur)
+        0xF9DC1C,  // lemon (clear of the amber "waiting" colour)
+        0x2E3F9E,  // navy
+        0x8CC63F,  // lime
+        0x5CC8F5,  // sky
+    ].map { NSColor(srgbRed: CGFloat($0 >> 16 & 0xFF) / 255, green: CGFloat($0 >> 8 & 0xFF) / 255, blue: CGFloat($0 & 0xFF) / 255, alpha: 1) }
+    var familyColor: Color? {
+        chat.familyColour.map { Color(nsColor: ChatRow.familyPalette[$0 % ChatRow.familyPalette.count]) }
     }
 
     var body: some View {
         Group {
-            if density == .cozy {
-                HStack(alignment: .center, spacing: 12) {
+            if density != .compact {
+                HStack(alignment: .center, spacing: m.spacing) {
                     icon
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    VStack(alignment: .leading, spacing: m.gap) {
+                        Text(chat.title).font(.system(size: m.title, weight: .semibold)).lineLimit(1)
+                        if let t = fromTitle { fromLine(t) }
                         if !chat.why.isEmpty { summary }
                     }
                     Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: m.gap) {
                         Text(ageText(chat.engaged))
                         if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                     }
-                    .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
+                    .font(.system(size: m.meta)).foregroundStyle(Theme.panelSecondary)
                 }
-                .padding(.vertical, 13)
+                .padding(.vertical, m.vpad)
             } else {
-                HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: m.spacing) {
                     icon
                     HStack(spacing: 8) {
-                        Text(chat.title).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                        Text(chat.title).font(.system(size: m.title, weight: .semibold)).lineLimit(1)
+                        if let t = fromTitle { fromLine(t).layoutPriority(-1) }  // gives way before title, folder and age
                         Spacer(minLength: 8)
                         Group {
                             if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                             Text(ageText(chat.engaged))
                         }
-                        .font(.system(size: 12)).foregroundStyle(Theme.panelSecondary)
+                        .font(.system(size: m.meta)).foregroundStyle(Theme.panelSecondary)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, m.vpad)
             }
         }
         .padding(.horizontal, 12)
+        .padding(.leading, CGFloat(spot?.depth ?? 0) * indentStep)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(selected ? Theme.text.opacity(0.06) : .clear)
-        .overlay(alignment: .top) { if divider { Rectangle().fill(Theme.hairline).frame(height: 1) } }
+        .overlay {
+            if let s = spot, s.depth > 0 || s.hasKids {
+                GeometryReader { g in treeLines(s, g.size).stroke(Theme.panelSecondary.opacity(0.45), lineWidth: 1.5) }
+                    .accessibilityHidden(true)
+            }
+        }
+        // A child's divider starts at its own indent, so the branch reads as one block.
+        .overlay(alignment: .top) {
+            if divider {
+                Rectangle().fill(Theme.hairline).frame(height: 1)
+                    .padding(.leading, CGFloat(spot?.depth ?? 0) * indentStep)
+            }
+        }
+    }
+}
+
+// The edge shadow: clear on the left, darkest where it meets the panel.
+struct EdgeShadow: View {
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        // Faint and wide like a macOS window shadow: most of it is a long, light tail.
+        let peak = scheme == .dark ? 0.28 : 0.12
+        LinearGradient(stops: [
+            .init(color: .black.opacity(0), location: 0),
+            .init(color: .black.opacity(peak * 0.12), location: 0.4),
+            .init(color: .black.opacity(peak * 0.35), location: 0.7),
+            .init(color: .black.opacity(peak * 0.7), location: 0.9),
+            .init(color: .black.opacity(peak), location: 1),
+        ], startPoint: .leading, endPoint: .trailing)
     }
 }
 
@@ -418,6 +606,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let script = Bundle.main.path(forResource: "recent_chats", ofType: "py")!
         store = Store(script: script)
         Prefs.shared.applyTheme()
+        NotificationCenter.default.addObserver(forName: .edgeShadowChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.updateEdgeShadow()
+        }
         Prefs.shared.onScriptChange = { [weak self] in self?.store.refresh() }
 
         panel = Panel(contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless],
@@ -425,7 +616,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false  // flush to the edge, no shadow on the left
+        panel.hasShadow = false  // flush to the edge; the optional edge shadow is its own window (edgeShadowWindow)
         // Glass has no panel material, so with See-through above 0 the gaps between groups are
         // part-transparent and scrolls there went to the window behind (Jamie, 19 Nov 2026).
         // Setting this explicitly is meant to make the whole frame take mouse and scroll
@@ -437,6 +628,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.contentView = NSHostingView(rootView: PanelView(
             store: store, open: { [weak self] in self?.open($0) },
             editIcon: { [weak self] in self?.editIcon($0) },
+            togglePin: { [weak self] in self?.togglePin($0) },
             openSettings: { [weak self] in self?.openSettings() }))
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -557,18 +749,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         panel.makeKey()
-        NSAnimationContext.runAnimationGroup { ctx in
+        NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.18
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().setFrame(target, display: true)
             panel.animator().alphaValue = 1
-        }
+        }, completionHandler: { [weak self] in self?.updateEdgeShadow() })
         shown = true
         mouseWasInside = target.insetBy(dx: -40, dy: -40).contains(NSEvent.mouseLocation)
         store.notice = nil
         store.query = ""
         store.focusTick += 1
         if Date().timeIntervalSince(store.lastRun) > 20 { store.refresh() }
+    }
+
+    // Settings › Appearance › Edge shadow. The panel's own window shadow barely shows (its
+    // content is see-through and it's flush to the screen edge), so a separate click-through
+    // window draws a soft gradient just left of the panel.
+    var edgeShadowWindow: NSWindow?
+    let edgeShadowWidth: CGFloat = 40  // click-through, so the width costs nothing
+
+    func updateEdgeShadow() {
+        guard shown, Prefs.shared.edgeShadow else { edgeShadowWindow?.orderOut(nil); return }
+        let f = panelTarget
+        let frame = NSRect(x: f.minX - edgeShadowWidth, y: f.minY, width: edgeShadowWidth, height: f.height)
+        if edgeShadowWindow == nil {
+            let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.hasShadow = false
+            w.ignoresMouseEvents = true
+            w.level = panel.level
+            w.collectionBehavior = panel.collectionBehavior
+            w.contentView = NSHostingView(rootView: EdgeShadow())
+            edgeShadowWindow = w
+        }
+        edgeShadowWindow?.setFrame(frame, display: true)
+        edgeShadowWindow?.orderFront(nil)
     }
 
     // The panel stays up the whole time Settings is open, so changes show live.
@@ -579,6 +796,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard shown, panelMayHide(settingsOpen: settingsOpen, explicit: explicit) else { return }
         debugLog("hide \(reason)")
         shown = false
+        edgeShadowWindow?.orderOut(nil)
         let f = panel.frame
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.14
@@ -590,8 +808,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func open(_ c: Chat) {
-        // Settings › Windows › Minimise other Claude windows; Option flips it for one click.
-        let keepOthers = Prefs.shared.minimiseOthers == NSEvent.modifierFlags.contains(.option)
+        // Settings › Windows › Minimise other Claude windows; Command or Option flips it for one click.
+        let keepOthers = Prefs.shared.minimiseOthers == !NSEvent.modifierFlags.intersection([.command, .option]).isEmpty
         guard let d = c.desktop_id, let url = URL(string: "claude://code/continue?session=\(d)") else { return }
         hide(reason: "open chat", explicit: true)
         // The deep link always loads the chat in the main window, so first try to
@@ -696,6 +914,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             try? out.write(to: file)
         }
         if let i = store.chats.firstIndex(where: { $0.id == c.id }), let p = pick { store.chats[i].icon = p }
+        store.refresh()
+    }
+
+    // Right-click > Pin / Unpin. Saves session ids to pinned.json "pinned"; the
+    // script puts those chats in the Pinned section and never in Done.
+    func togglePin(_ c: Chat) {
+        let file = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/claude-swipe/pinned.json")
+        var data = (try? JSONSerialization.jsonObject(with: Data(contentsOf: file))) as? [String: Any] ?? [:]
+        var pins = data["pinned"] as? [String] ?? []
+        let pin = !pins.contains(c.id)
+        if pin { pins.append(c.id) } else { pins.removeAll { $0 == c.id } }
+        data["pinned"] = pins
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if let out = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted]) {
+            try? out.write(to: file)
+        }
+        // Move it now; the refresh puts an unpinned chat back in its own section.
+        if let i = store.chats.firstIndex(where: { $0.id == c.id }) {
+            store.chats[i].pinned = pin
+            if pin { store.chats[i].section = "pinned" }
+        }
         store.refresh()
     }
 

@@ -43,14 +43,21 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Theme: Auto / Light / Dark
 - Background: Solid / Frosted / Glass (picture tiles). Helper: Frosted blurs what's behind. Glass puts each group of chats on Liquid Glass. (below macOS 26: Frosted blurs what's behind. Glass needs macOS 26 or later.)
 - See-through / How much of what's behind shows through your chats. Higher is harder to read over busy windows.
-- Density: Cozy / Compact. Helper: Cozy shows each chat's summary. Compact fits more chats on one line each.
+- Edge shadow / A shadow down the panel's left edge. Useful when the panel is solid or barely see-through, so it doesn't look like it blends into the window behind.
+- Density: Default / Cozy / Compact. Helper: Default shows each chat's summary. Cozy is the same, tighter. Compact fits more chats on one line each.
+- Text size / Shrinks or grows text and spacing in any density. Slider 85% to 115%.
+- Summary lines: 1 / 2 / 3. Helper: How much of each chat's summary shows. (Compact: Compact shows no summary.) Remembered separately for Default and Cozy.
+- Icons: Tinted / Solid. Helper: Solid fills each icon with its state's colour, so states stand out more.
 - Button: Reset to defaults
 - When macOS forces a solid panel: Reduce transparency is on in macOS System Settings, so the panel is solid. Turn it off there to use these controls. (Increase contrast gets the same line with its own name.)
 
 ## Settings › Cards
 - Preview
 - Topic icon from: Chat subject / Folder. Helper: Claude picks these, so AI must be on. Right-click a chat to pick your own.
-- Hide folder label for: None (plus folder names). Helper: Most chats sit in one folder. Hide that folder's label to keep cards tidy.
+- Hide all folder labels / Cards show no folder at all
+- Hide folder labels for: a checkbox per folder ("No folders yet" when there are none). Helper: Most chats sit in one or two folders. Hide those labels to keep cards tidy. Greyed out while Hide all folder labels is on.
+- Linked chats: Indent / Ring. Helper: Chats started from another chat. Indent puts them under it. Ring gives related chats the same coloured ring.
+- In the panel, a side session whose parent isn't listed right above it: "from <parent title>". Tooltip: "Started from <parent title>".
 
 ## Settings › Windows
 - The same "Jump to the right window" block as Welcome step 2 (title, body, pictures, needs line), with the switch named "Minimise other Claude windows".

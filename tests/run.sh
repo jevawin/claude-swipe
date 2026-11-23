@@ -4,5 +4,5 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="${TMPDIR:-/tmp}/claude-swipe-tests"
-swiftc -swift-version 5 Sources/Appearance.swift tests/main.swift -o "$OUT"
+swiftc -swift-version 5 Sources/Appearance.swift Sources/LinkedChats.swift tests/main.swift -o "$OUT"
 "$OUT"

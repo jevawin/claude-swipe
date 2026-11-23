@@ -12,7 +12,28 @@ import Foundation
 // Solid: theme colour, no blur. Frosted: one behind-window material. Glass (macOS 26+):
 // Liquid Glass groups over a tint, no panel material.
 enum BackgroundStyle: String, CaseIterable { case solid, frosted, glass }
-enum Density: String, CaseIterable { case cozy, compact }
+// Default: icon, title over summary, age over folder (was "Cozy" before 22 Nov 2026).
+// Cozy: the same text size, with less space and smaller icons. Compact: one line, no summary.
+enum Density: String, CaseIterable {
+    case standard = "default", cozy, compact
+    var label: String { self == .standard ? "Default" : rawValue.capitalized }
+}
+
+// Sizes for one row. Text size scales every number except the summary line count.
+struct RowMetrics {
+    let icon, title, summary, meta, vpad, spacing, gap: CGFloat
+    static func of(_ d: Density, scale s: CGFloat) -> RowMetrics {
+        switch d {
+        case .standard: return RowMetrics(icon: 32*s, title: 14*s, summary: 12.5*s, meta: 12*s, vpad: 13*s, spacing: 12*s, gap: 4*s)
+        case .cozy:     return RowMetrics(icon: 28*s, title: 14*s, summary: 12.5*s, meta: 12*s, vpad: 8*s, spacing: 10*s, gap: 2*s)
+        case .compact:  return RowMetrics(icon: 24*s, title: 14*s, summary: 0, meta: 12*s, vpad: 8*s, spacing: 10*s, gap: 0)
+        }
+    }
+}
+
+// How linked chats (side sessions) look. Indent: under their parent (Jamie's pick).
+// Ring: a shared coloured ring round the state icon (Kristina's pick). 23 Nov 2026.
+enum LinkStyle: String, CaseIterable { case indent, ring }
 
 struct AppearanceValues: Equatable {
     var background: BackgroundStyle
@@ -46,8 +67,10 @@ func effective(_ v: AppearanceValues, solidRequired: Bool, glassAvailable: Bool)
 // Each group's own fill, scaled by the same opacity as the panel tint, so See-through
 // at 0 leaves only the blur or glass. Glass groups start thinner (32%, as in the spec).
 func groupFillAlpha(opacity: Double, background: BackgroundStyle) -> Double {
-    let base = background == .glass ? 0.32 : 0.55
-    return (base * opacity).rounded() / 100  // whole percent
+    // Solid and Frosted: groups are near-white at full paint and never fade below a
+    // floor, so they still lift off the panel at 100% see-through (Kris, 22 Nov 2026).
+    if background == .glass { return (0.32 * opacity).rounded() / 100 }
+    return max(20, (0.85 * opacity).rounded()) / 100  // whole percent
 }
 
 // Centred in `visible`, then moved left just enough to clear the panel, but never

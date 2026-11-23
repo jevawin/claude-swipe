@@ -9,6 +9,8 @@ import SwiftUI
 
 // One place for every setting. Writes go straight to UserDefaults
 // (com.jevawin.claude-swipe); settings the script uses trigger a refresh.
+extension Notification.Name { static let edgeShadowChanged = Notification.Name("edgeShadowChanged") }
+
 final class Prefs: ObservableObject {
     static let shared = Prefs()
     private let d = UserDefaults.standard
@@ -23,12 +25,28 @@ final class Prefs: ObservableObject {
         }
     }
     @Published var density: Density { didSet { d.set(density.rawValue, forKey: "density") } }
+    // Text size for rows, 0.85...1.15 of each preset's sizes.
+    @Published var textScale: Double { didSet { d.set(textScale, forKey: "textScale") } }
+    // Summary lines per preset (Compact has none).
+    @Published var linesDefault: Int { didSet { d.set(linesDefault, forKey: "summaryLinesDefault") } }
+    @Published var linesCozy: Int { didSet { d.set(linesCozy, forKey: "summaryLinesCozy") } }
+    // Icons: false = Tinted (pale circle, coloured symbol), true = Solid (full colour, white symbol).
+    @Published var solidIcons: Bool { didSet { d.set(solidIcons, forKey: "solidIcons") } }
+    // A window shadow on the panel's left edge, so it reads as sitting above other windows.
+    @Published var edgeShadow: Bool {
+        didSet { d.set(edgeShadow, forKey: "edgeShadow"); NotificationCenter.default.post(name: .edgeShadowChanged, object: nil) }
+    }
+    @Published var linkStyle: LinkStyle { didSet { d.set(linkStyle.rawValue, forKey: "linkStyle") } }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
-    @Published var homeFolder: String { didSet { d.set(homeFolder, forKey: "homeFolder") } }
+    // Folders whose label is hidden on cards. Replaces the old single "homeFolder".
+    @Published var hiddenFolders: [String] { didSet { d.set(hiddenFolders, forKey: "hiddenFolders") } }
+    @Published var hideAllFolders: Bool { didSet { d.set(hideAllFolders, forKey: "hideAllFolders") } }
     @Published var minimiseOthers: Bool { didSet { d.set(minimiseOthers, forKey: "minimiseOthers") } }
     // Percent to fade Done cards by. Capped at 80 so they stay readable.
     @Published var doneFade: Double { didSet { d.set(doneFade, forKey: "doneFade") } }
+    // Which sections fade: "both", "done", "clear" (Ready to clear) or "none".
+    @Published var fadeWhich: String { didSet { d.set(fadeWhich, forKey: "fadeWhich") } }
     // Whether the Done section is open; remembers the last click.
     @Published var showDone: Bool { didSet { d.set(showDone, forKey: "showDone") } }
     // Model changes only affect new picks, so no refresh.
@@ -51,19 +69,37 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.cozy.rawValue,
-            "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
+            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false, "edgeShadow": false, "linkStyle": LinkStyle.indent.rawValue,
+            "hideAllFolders": false, "minimiseOthers": false, "doneFade": 40.0, "fadeWhich": "both", "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
         appearance = clampedToFloor(AppearanceValues(
             background: BackgroundStyle(rawValue: d.string(forKey: "panelBackground") ?? "") ?? defaultAppearance.background,
             opacity: d.double(forKey: "panelOpacity")))
-        density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .cozy
+        // Before 22 Nov 2026 "cozy" was the roomy preset, now called Default.
+        if !d.bool(forKey: "densityRenamed") {
+            if d.string(forKey: "density") == "cozy" { d.set(Density.standard.rawValue, forKey: "density") }
+            d.set(true, forKey: "densityRenamed")
+        }
+        density = Density(rawValue: d.string(forKey: "density") ?? "") ?? .standard
+        textScale = min(1.15, max(0.85, d.double(forKey: "textScale")))
+        linesDefault = min(3, max(1, d.integer(forKey: "summaryLinesDefault")))
+        linesCozy = min(3, max(1, d.integer(forKey: "summaryLinesCozy")))
+        solidIcons = d.bool(forKey: "solidIcons")
+        edgeShadow = d.bool(forKey: "edgeShadow")
+        linkStyle = LinkStyle(rawValue: d.string(forKey: "linkStyle") ?? "") ?? .indent
         iconSource = d.string(forKey: "iconSource") ?? "subject"
-        homeFolder = d.string(forKey: "homeFolder") ?? ""
+        // First launch after the update: carry the old single hidden folder into the list.
+        if d.stringArray(forKey: "hiddenFolders") == nil {
+            let old = d.string(forKey: "homeFolder") ?? ""
+            d.set(old.isEmpty ? [] : [old], forKey: "hiddenFolders")
+        }
+        hiddenFolders = d.stringArray(forKey: "hiddenFolders") ?? []
+        hideAllFolders = d.bool(forKey: "hideAllFolders")
         minimiseOthers = d.bool(forKey: "minimiseOthers")
         doneFade = min(80, max(0, d.double(forKey: "doneFade")))
+        fadeWhich = d.string(forKey: "fadeWhich") ?? "both"
         showDone = d.bool(forKey: "showDone")
         aiModel = d.string(forKey: "aiModel") ?? "haiku"
         aiSort = d.bool(forKey: "aiSort")
@@ -96,7 +132,21 @@ final class Prefs: ObservableObject {
     func resetAppearance() {
         theme = "auto"
         appearance = defaultAppearance
-        density = .cozy
+        density = .standard
+        textScale = 1.0
+        linesDefault = 2
+        linesCozy = 1
+        solidIcons = false
+        edgeShadow = false
+    }
+
+    func summaryLines(_ d: Density) -> Int { d == .cozy ? linesCozy : d == .standard ? linesDefault : 0 }
+
+    func hidesLabel(_ folder: String) -> Bool { hideAllFolders || hiddenFolders.contains(folder) }
+
+    func setHidden(_ folder: String, _ hide: Bool) {
+        if hide { if !hiddenFolders.contains(folder) { hiddenFolders.append(folder) } }
+        else { hiddenFolders.removeAll { $0 == folder } }
     }
 
     var pickIcon: Bool { aiIcon }
@@ -143,7 +193,7 @@ final class SystemStatus: ObservableObject {
             p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             p.arguments = ["claude", "auth", "status", "--json"]
             var env = ProcessInfo.processInfo.environment
-            env["PATH"] = "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+            env["PATH"] = Self.cliPath
             p.environment = env
             let out = Pipe()
             p.standardOutput = out
@@ -161,6 +211,35 @@ final class SystemStatus: ObservableObject {
                 }
             }
             DispatchQueue.main.async { self.claude = result }
+        }
+    }
+
+    private static let cliPath = "\(NSHomeDirectory())/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+    private var signInPoll: Timer?
+
+    // Opens Terminal running `claude auth login`. Opening a .command file runs it
+    // in Terminal with no Automation prompt (measured: `open x.command` ran it in 2s).
+    // Then re-checks every 3s for up to 5 minutes, so the light turns green on its own.
+    func signIn() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("claudeswipe-sign-in.command")
+        let script = """
+        #!/bin/zsh
+        export PATH="\(Self.cliPath):$PATH"
+        claude auth login
+        echo
+        echo "Done. You can close this window."
+        """
+        do {
+            try script.write(to: url, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        } catch { return }
+        NSWorkspace.shared.open(url)
+
+        signInPoll?.invalidate()
+        let deadline = Date().addingTimeInterval(300)
+        signInPoll = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] t in
+            guard let self, self.claude != .ready, Date() < deadline else { t.invalidate(); return }
+            self.checkClaude()
         }
     }
 }
@@ -233,11 +312,20 @@ struct StatusLight: View {
 
 struct ClaudeStatusLine: View {
     let state: ClaudeCLI
+    var onSignIn: (() -> Void)? = nil
     var body: some View {
         if state != .unknown {
-            StatusLight(ok: state == .ready, text: state == .ready ? "claude command found and signed in"
-                        : state == .signedOut ? "claude command found but not signed in"
-                        : "claude command not found")
+            HStack(spacing: 10) {
+                StatusLight(ok: state == .ready, text: state == .ready ? "claude command found and signed in"
+                            : state == .signedOut ? "claude command found but not signed in"
+                            : "claude command not found")
+                if state == .signedOut, let onSignIn {
+                    Button("Sign in", action: onSignIn)
+                        .buttonStyle(.link).font(.system(size: 12))
+                        .help("Opens Terminal and runs claude auth login")
+                        .accessibilityHint("Opens Terminal and runs claude auth login")
+                }
+            }
         }
     }
 }
@@ -315,7 +403,7 @@ func openAccessibilitySettings() {
 
 let aiWarningSettings = "These features use your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan."
 let aiWarningWelcome = "This uses your own Claude plan. When chats are new or change, ClaudeSwipe sends small requests through your claude login. They include each chat's title, your first and latest messages, and Claude's last reply. All of it counts against your plan."
-let minimiseHelper = "When you open a chat, every other Claude window goes to the Dock. Hold Option while you click a chat to flip this setting for that one click."
+let minimiseHelper = "When you open a chat, every other Claude window goes to the Dock. Hold Command or Option while you click a chat to flip this setting for that one click."
 
 // MARK: - Settings window
 
@@ -338,7 +426,7 @@ struct SettingsView: View {
     }
 
     let panes: [(name: String, icon: String)] = [
-        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
+        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"), ("Guide", "questionmark.circle"),
     ]
 
     var body: some View {
@@ -376,6 +464,7 @@ struct SettingsView: View {
                     case "Cards": cards
                     case "Windows": windows
                     case "AI": ai
+                    case "Guide": guide
                     default: general
                     }
                 }
@@ -408,7 +497,7 @@ struct SettingsView: View {
     var appearancePane: some View {
         let solid = prefs.systemSolid
         let look = effective(prefs.appearance, solidRequired: false, glassAvailable: glassAvailable)
-        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .cozy
+        let isDefault = prefs.appearance == defaultAppearance && prefs.theme == "auto" && prefs.density == .standard && prefs.textScale == 1.0 && !prefs.solidIcons && !prefs.edgeShadow
         return VStack(alignment: .leading, spacing: 14) {
             if solid {
                 WarningBox(text: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
@@ -443,11 +532,40 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(solid || look.background == .solid).opacity(solid || look.background == .solid ? 0.5 : 1)
+                Hairline()
+                Row(title: "Edge shadow", helper: "A shadow down the panel's left edge. Useful when the panel is solid or barely see-through, so it doesn't look like it blends into the window behind.") {
+                    Toggle("Edge shadow", isOn: $prefs.edgeShadow).toggleStyle(.switch).labelsHidden()
+                }
             }
             Group_ {
-                tiles("Density", helper: "Cozy shows each chat's summary. Compact fits more chats on one line each.",
-                      Density.allCases, selected: prefs.density, name: { $0.rawValue.capitalized },
+                tiles("Density", helper: "Default shows each chat's summary. Cozy is the same, tighter. Compact fits more chats on one line each.",
+                      Density.allCases, selected: prefs.density, name: { $0.label },
                       set: { prefs.density = $0 }, look: { _ in look }, density: { $0 })
+                Hairline()
+                Row(title: "Text size", helper: "Shrinks or grows text and spacing in any density.") {
+                    HStack(spacing: 8) {
+                        Slider(value: $prefs.textScale, in: 0.85...1.15, step: 0.05).frame(width: 130)
+                        Text("\(Int((prefs.textScale * 100).rounded()))%").monospacedDigit()
+                            .foregroundStyle(Theme.secondary).frame(width: 44, alignment: .trailing)
+                    }
+                }
+                Hairline()
+                Row(title: "Summary lines", helper: prefs.density == .compact ? "Compact shows no summary." : "How much of each chat's summary shows.") {
+                    Picker("Summary lines", selection: Binding(
+                        get: { prefs.density == .cozy ? prefs.linesCozy : prefs.linesDefault },
+                        set: { if prefs.density == .cozy { prefs.linesCozy = $0 } else { prefs.linesDefault = $0 } })) {
+                        Text("1").tag(1); Text("2").tag(2); Text("3").tag(3)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                .disabled(prefs.density == .compact).opacity(prefs.density == .compact ? 0.5 : 1)
+                Hairline()
+                Row(title: "Icons", helper: "Solid fills each icon with its state's colour, so states stand out more.") {
+                    Picker("Icons", selection: $prefs.solidIcons) {
+                        Text("Tinted").tag(false); Text("Solid").tag(true)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
             }
             HStack {
                 Spacer()
@@ -480,16 +598,20 @@ struct SettingsView: View {
     }
 
     var folders: [String] {
-        var f = Array(Set(store.chats.map(\.folder))).sorted()
-        if !prefs.homeFolder.isEmpty && !f.contains(prefs.homeFolder) { f.insert(prefs.homeFolder, at: 0) }
-        return f
+        // Current chats' folders, plus hidden ones with no chats right now so they can be unticked.
+        Array(Set(store.chats.map(\.folder)).union(prefs.hiddenFolders)).sorted()
     }
 
     var cards: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
-                ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false)
+                VStack(spacing: 0) {
+                    ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false,
+                            spot: prefs.linkStyle == .indent ? TreeSpot(hasKids: true) : nil)
+                    ChatRow(chat: sampleChild, selected: false, density: prefs.density, divider: true,
+                            spot: prefs.linkStyle == .indent ? TreeSpot(depth: 1) : nil)
+                }
                     .background(GroupBackground(look: AppearanceValues(background: .solid, opacity: 100)))
                     .frame(maxWidth: 440)
                     .padding(12)
@@ -505,24 +627,55 @@ struct SettingsView: View {
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
                 }
                 Hairline()
-                Row(title: "Hide folder label for",
-                    helper: "Most chats sit in one folder. Hide that folder's label to keep cards tidy.") {
-                    Picker("Hide folder label for", selection: $prefs.homeFolder) {
-                        Text("None").tag("")
-                        ForEach(folders, id: \.self) { Text($0).tag($0) }
-                    }
-                    .labelsHidden().frame(maxWidth: 220)
+                Row(title: "Hide all folder labels", helper: "Cards show no folder at all") {
+                    Toggle("Hide all folder labels", isOn: $prefs.hideAllFolders)
+                        .toggleStyle(.switch).labelsHidden()
                 }
                 Hairline()
-                Row(title: "Fade done chats",
-                    helper: "Done chats show fainter so open work stands out. 80% at most, so they stay readable.") {
+                Row(title: "Hide folder labels for",
+                    helper: "Most chats sit in one or two folders. Hide those labels to keep cards tidy.") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if folders.isEmpty {
+                            Text("No folders yet").foregroundStyle(Theme.secondary)
+                        }
+                        ForEach(folders, id: \.self) { f in
+                            Toggle(isOn: Binding(get: { prefs.hiddenFolders.contains(f) },
+                                                 set: { prefs.setHidden(f, $0) })) {
+                                Text(f).lineLimit(1).truncationMode(.middle)
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                    .frame(maxWidth: 220, alignment: .leading)
+                }
+                .disabled(prefs.hideAllFolders)
+                .opacity(prefs.hideAllFolders ? 0.5 : 1)
+                Hairline()
+                Row(title: "Linked chats",
+                    helper: "Chats started from another chat. Indent puts them under it. Ring gives related chats the same coloured ring.") {
+                    Picker("Linked chats", selection: $prefs.linkStyle) {
+                        Text("Indent").tag(LinkStyle.indent); Text("Ring").tag(LinkStyle.ring)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Hairline()
+                Row(title: "Fade", helper: "Which finished chats show fainter, so open work stands out.") {
+                    Picker("Fade", selection: $prefs.fadeWhich) {
+                        Text("Both").tag("both"); Text("Done").tag("done"); Text("Ready to clear").tag("clear"); Text("Neither").tag("none")
+                    }
+                    // A menu, not segments: four segments squeezed the title and helper into a sliver.
+                    .pickerStyle(.menu).labelsHidden().fixedSize()
+                }
+                Hairline()
+                Row(title: "Fade amount",
+                    helper: "80% at most, so they stay readable. With Both, Ready to clear fades a step further.") {
                     HStack(spacing: 8) {
                         Slider(value: $prefs.doneFade, in: 0...80, step: 5).frame(width: 130)
                         Text("\(Int(prefs.doneFade))%").monospacedDigit()
                             .foregroundStyle(Theme.secondary).frame(width: 34, alignment: .trailing)
-                        Button("No fade") { prefs.doneFade = 0 }.disabled(prefs.doneFade == 0)
                     }
                 }
+                .disabled(prefs.fadeWhich == "none").opacity(prefs.fadeWhich == "none" ? 0.5 : 1)
             }
         }
     }
@@ -530,8 +683,67 @@ struct SettingsView: View {
     var sampleChat: Chat {
         Chat(id: "preview", status: "waiting", why: "Want me to send the draft to the team now?",
              title: "Write the launch post", folder: "clients/acme",
-             age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
-             icon: "pencil", own_icon: nil)
+             age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: "preview", cwd: nil,
+             icon: "pencil", own_icon: nil, family: "preview", familyColour: 0)
+    }
+
+    var sampleChild: Chat {
+        Chat(id: "preview-child", status: "running", why: "Checking the links in the draft.",
+             title: "Check the links", folder: "clients/acme",
+             age: 120, engaged: 120, section: "today", app: "desktop", desktop_id: "preview-child", cwd: nil,
+             icon: "link", own_icon: nil, parent: "preview", family: "preview", familyColour: 0)
+    }
+
+    // Settings › Guide "Good to know": a short bold title per topic, with bullets under it.
+    var guideTips: [(title: String, points: [String])] {[
+        ("Topic icons", ["Right-click a chat and pick 'Change topic icon…' to choose your own.",
+                         "Icons you choose stay put. Claude never replaces them."]),
+        ("Sections", ["'Active': chats you've worked in during the last hour.",
+                      "'Waiting': chats that need you, split into today and older.",
+                      "'Ready to clear' only appears if you turn it on in Settings › AI."]),
+    ]}
+
+    // A short explainer: what the icon colours mean and a few things people miss.
+    var guide: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Group_ {
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What the icon colours mean").font(.system(size: 15, weight: .semibold))
+                        Text("The colour of each chat's icon shows its state. Hover over an icon to see it.")
+                            .font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                    }
+                    ForEach(statusOrder, id: \.self) { s in
+                        let st = statusStyle[s]!
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Circle().fill(st.color).frame(width: 12, height: 12).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                            Text(statusName[s] ?? s).font(.system(size: 13, weight: .medium)).frame(width: 110, alignment: .leading)
+                            Text(statusMeaning[s] ?? "").font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+            Group_ {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Good to know").font(.system(size: 15, weight: .semibold))
+                    ForEach(guideTips, id: \.title) { tip in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(tip.title).font(.system(size: 13, weight: .semibold))
+                            ForEach(tip.points, id: \.self) { point in
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text("•").foregroundStyle(Theme.secondary)
+                                    Text(point).fixedSize(horizontal: false, vertical: true)
+                                }
+                                .font(.system(size: 13))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+        }
     }
 
     var windows: some View {
@@ -743,7 +955,7 @@ struct AIIntro: View {
             }
             WarningBox(text: warning)
             PrivacyNote(text: "ClaudeSwipe never signs in to your Claude account. It uses the claude command you already set up, and only checks that you are signed in.")
-            ClaudeStatusLine(state: status.claude)
+            ClaudeStatusLine(state: status.claude, onSignIn: status.signIn)
         }
         .padding(14)
     }
@@ -841,7 +1053,7 @@ struct Demo: View {
 // the picture tiles and the slider previews. A sketch, not the real material.
 struct MiniPanel: View {
     let values: AppearanceValues
-    var density: Density = .cozy
+    var density: Density = .standard
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -874,13 +1086,13 @@ struct MiniPanel: View {
                     }
                     Rectangle().fill((dark ? Color(nsColor: hsl(60, 2.7, 14.5)) : Color(nsColor: hsl(48, 33.3, 97.1)))
                         .opacity(values.opacity / 100))
-                    VStack(spacing: density == .cozy ? 3 : 2) {
-                        ForEach(0..<(density == .cozy ? 3 : 5), id: \.self) { _ in
+                    VStack(spacing: density == .compact ? 2 : 3) {
+                        ForEach(0..<(density == .standard ? 3 : density == .cozy ? 4 : 5), id: \.self) { _ in
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(values.background == .glass ? (dark ? Color(white: 0.35) : Color(white: 0.92)).opacity(0.85)
                                       : (dark ? Color(white: 0.19) : .white).opacity(groupFillAlpha(opacity: values.opacity, background: values.background)))
                                 .overlay(RoundedRectangle(cornerRadius: 2).stroke(values.background == .glass ? .white.opacity(0.8) : .clear, lineWidth: 0.5))
-                                .frame(height: density == .cozy ? 8 : 5)
+                                .frame(height: density == .standard ? 8 : density == .cozy ? 6.5 : 5)
                         }
                     }
                     .padding(4)
@@ -897,7 +1109,7 @@ struct MiniPanel: View {
 }
 
 // The Density tiles: a close-up of the solid panel, so the row layout is the only
-// difference. Cozy: two rows with a title and a summary line. Compact: five one-line rows.
+// difference. Default: two rows with a summary line. Cozy: three tighter ones. Compact: five one-line rows.
 struct DensityPicture: View {
     let density: Density
     @Environment(\.colorScheme) private var scheme
@@ -905,12 +1117,13 @@ struct DensityPicture: View {
     var body: some View {
         let dark = scheme == .dark
         let ink = dark ? Color.white : Color.black
-        let cozy = density == .cozy
+        let cozy = density != .compact
+        let tight = density == .cozy
         VStack(spacing: 0) {
-            ForEach(0..<(cozy ? 2 : 5), id: \.self) { i in
+            ForEach(0..<(density == .standard ? 2 : tight ? 3 : 5), id: \.self) { i in
                 if i > 0 { Rectangle().fill(ink.opacity(0.12)).frame(height: 0.5) }
                 HStack(spacing: 4) {
-                    Circle().fill(Theme.brand.opacity(0.7)).frame(width: cozy ? 9 : 5, height: cozy ? 9 : 5)
+                    Circle().fill(Theme.brand.opacity(0.7)).frame(width: tight ? 7 : cozy ? 9 : 5, height: tight ? 7 : cozy ? 9 : 5)
                     VStack(alignment: .leading, spacing: 2.5) {
                         Capsule().fill(ink.opacity(0.75)).frame(width: 30, height: 2.5)
                         if cozy { Capsule().fill(ink.opacity(0.35)).frame(width: 44, height: 2) }
@@ -919,7 +1132,7 @@ struct DensityPicture: View {
                     Capsule().fill(ink.opacity(0.35)).frame(width: 8, height: 2)
                 }
                 .padding(.horizontal, 5)
-                .frame(height: cozy ? 20 : 8.4)
+                .frame(height: density == .standard ? 20 : tight ? 14 : 8.4)
             }
         }
         .background(RoundedRectangle(cornerRadius: 4).fill(dark ? Color(white: 0.19) : .white))

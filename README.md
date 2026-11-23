@@ -1,22 +1,34 @@
 # ClaudeSwipe
 
-A macOS menu bar app that slides out a panel of your recent Claude Code chats, so you can see which ones are waiting on you.
+A macOS menu bar app that slides out a full-height panel of your recent Claude Code chats on the right of the screen, so you can see which ones are waiting on you.
 
 Chats are grouped as:
 
+- **Pinned**: chats you pinned, always at the top.
 - **Active**: anything you've touched in the last hour.
 - **Waiting · today** and **Waiting · older**: chats that need you, split by when you last touched them.
-- **Ready to clear**: done chats where the whole job is finished, so you can archive them. Only shown if you turn it on in Settings › AI.
-- **Done**: finished chats, collapsed.
+- **Done**: finished chats, shown faded. Click the header to collapse it.
+- **Ready to clear**: done chats where the whole job is finished, so you can archive them. They sit under Done, faded a step further. Only shown if you turn it on in Settings › AI.
 
-Each card shows the chat's status, folder, a one-line summary and an emoji. The status tile tells you what the chat needs:
+Each row shows a round icon, the chat's title, a one-line summary, how long ago you touched it, and its folder. The folder is the shortest name no other chat shares: `bookmygarage`, but `clients/acme` and `personal/acme` when both are there. Hover over it for the full path.
 
-- Blue dots: running.
-- Amber question mark: waiting for your answer.
-- Red cross: blocked, for example on a permission prompt. It needs a click to carry on.
-- Green tick: done.
-- Violet box: ready to clear.
+The icon's colour tells you what the chat needs:
+
+- Blue: running.
+- Amber: waiting for your answer.
+- Red: blocked, for example on a permission prompt. It needs a click to carry on.
+- Green: done.
+- Faded green: ready to clear. A done chat the AI thinks is finished with.
 - Grey: stuck or unsure.
+
+The symbol inside is the chat's topic icon (an SF Symbol, such as a banknote or a hammer) if it has one. Otherwise it's the state's own symbol: dots, question mark, cross, tick, box, exclamation mark or dotted circle.
+
+A chat started from another one (a side session) shows its link in one of two ways. Pick which in Settings › Cards › Linked chats:
+
+- **Indent** (default): the side session sits under the chat that started it, joined by a line. If the two are in different sections, or the parent isn't listed, the row says "from <parent>" instead.
+- **Ring**: every chat in the family gets the same coloured ring round its icon. Each family gets its own colour.
+
+A chat you detached (moved to top level) shows as a plain chat in both.
 
 ## Install
 
@@ -35,16 +47,18 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 - **Open**: push the cursor against the right edge of the screen, press ⌃⌥C, or click the menu bar icon.
 - **Search**: start typing as soon as it opens. `acme` finds chats in an `acme` folder, `clients` finds every `clients/…` folder.
 - **Open a chat**: click it, or press Enter for the top match.
-- **Change a chat's emoji**: right-click it and pick "Change emoji…". Your pick always wins.
+- **Pin a chat**: right-click it and pick "Pin". Pinned chats stay at the top and never move to Done or Ready to clear, even if you haven't opened them in a week. Right-click and pick "Unpin" to put it back.
+- **Change a chat's topic icon**: right-click it and pick "Change topic icon…". Your pick always wins.
 - **Close**: move the cursor away, click elsewhere, or press Esc.
-- **Settings**: click the sliders button in the panel header, pick "Settings…" from the menu bar icon, or press ⌘, while the panel is open.
+- **Settings**: click the sliders button in the search bar, pick "Settings…" from the menu bar icon, or press ⌘, while the panel is open.
 
 ## Settings
 
-- **General**: theme (auto, light or dark), launch at login, and a button to show the welcome screen again.
-- **Cards**: whether the status or the emoji is the big icon, whether to show emoji at all, whether emoji come from the chat's subject or its folder, and a folder whose label to hide (most people keep most chats in one folder).
-- **Windows**: minimise other Claude windows when you open a chat. Hold Option while you click a chat to flip this setting for that one click.
-- **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick emoji, and the Ready to clear section. A Re-pick button asks again for every chat's emoji.
+- **General**: launch at login, and a button to show the welcome screen again.
+- **Appearance**: theme (auto, light or dark); background (Solid, Frosted, or Glass on macOS 26 and later); how see-through the panel is; and density (Cozy shows each chat's summary, Compact fits more chats on one line each). Reduce transparency or Increase contrast in macOS forces Solid.
+- **Cards**: whether topic icons come from the chat's subject or its folder, which folders' labels to hide (most people keep most chats in one or two folders) or a switch to hide them all, how linked chats show (Indent or Ring), and which finished chats fade and by how much.
+- **Windows**: minimise other Claude windows when you open a chat. Hold Command or Option while you click a chat to flip this setting for that one click.
+- **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick a topic icon for each chat, and the Ready to clear section. A Re-pick button asks again for every chat's topic icon.
 
 ## Two optional extras
 
@@ -58,6 +72,6 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 - Results the AI already gave stay cached and still show if you turn a switch off. Turning it off only stops new requests.
 - Without a signing certificate, every rebuild makes macOS forget the window permission. Run `./make-cert.sh` once: it adds a "ClaudeSwipe Local" certificate to your login keychain, and `build.sh` signs with it from then on. Then grant the permission one last time.
 - If the permission still won't stick, look for other copies of ClaudeSwipe.app, such as a `build/` folder in another checkout. They share an ID, and System Settings may record the wrong copy. Delete them, run `tccutil reset Accessibility com.jevawin.claude-swipe`, and grant it again.
-- To set a folder's emoji by hand, edit `~/Library/Application Support/claude-swipe/folder-emoji.json` under `"overrides"`. A key covers that folder and everything under it. These work with AI off.
+- To set a folder's topic icon by hand, edit `~/Library/Application Support/claude-swipe/folder-icons.json` under `"overrides"`. A key covers that folder and everything under it. The value must be a name from `icons.json`; anything else shows the state's symbol. These work with AI off.
 - Folder names are shown relative to `~/Developer` when chats live there.
-- `recent_chats.py` runs on its own too: `python3 recent_chats.py` lists your chats in a terminal and sends no requests. Add `--sort`, `--emoji subject` or `--clear` to use AI; `--help` lists the rest.
+- `recent_chats.py` runs on its own too: `python3 recent_chats.py` lists your chats in a terminal and sends no requests. Add `--sort`, `--icon subject` or `--clear` to use AI; `--help` lists the rest.
