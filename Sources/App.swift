@@ -22,6 +22,15 @@ struct Chat: Codable, Identifiable, Hashable {
     var icon: String?     // topic SF Symbol name; only names in icons.json are shown
     var own_icon: Bool?   // your own pick decides the icon (counted for Re-pick)
     var pinned: Bool?
+    var parent: String?   // desktop id of the chat this one was started from
+    var family: String?   // top of its side-session chain; set only when 2+ listed chats share it
+    var familyColour: Int?  // index into ChatRow.familyPalette, set by Store.assignFamilyColours
+    var parent_title: String?  // the parent's title, for "from <parent>" when it isn't listed above
+}
+
+// The Indent layout of linked chats (treeOrder) lives in Sources/LinkedChats.swift.
+func treeOrder(_ items: [Chat]) -> [(chat: Chat, spot: TreeSpot)] {
+    treeOrder(items, id: \.id, node: \.desktop_id, parent: \.parent).map { ($0.item, $0.spot) }
 }
 
 // The SF Symbol names topic icons may use (icons.json in Resources, shared with recent_chats.py).
@@ -78,9 +87,27 @@ final class Store: ObservableObject {
 
     private func apply(_ r: Result<[Chat], Error>) {
         switch r {
-        case .success(let c): chats = c; error = nil
+        case .success(var c): Store.assignFamilyColours(&c); chats = c; error = nil
         case .failure(let e): error = "\(e)"
         }
+    }
+
+    // Linked-chat families take colours in palette order, so the first few on screen never look
+    // alike. A family keeps its colour while it's listed (remembered across launches); a new
+    // family takes the first colour no listed family has. Past the palette's end, colours repeat.
+    static func assignFamilyColours(_ chats: inout [Chat]) {
+        let key = "familyColours", n = ChatRow.familyPalette.count
+        var families: [String] = []
+        for c in chats { if let f = c.family, !families.contains(f) { families.append(f) } }
+        let saved = UserDefaults.standard.dictionary(forKey: key) as? [String: Int] ?? [:]
+        var colour: [String: Int] = [:], used = Set<Int>()
+        for f in families { if let i = saved[f], i < n, !used.contains(i) { colour[f] = i; used.insert(i) } }
+        for f in families where colour[f] == nil {
+            let i = (0..<n).first { !used.contains($0) } ?? colour.count % n
+            colour[f] = i; used.insert(i)
+        }
+        UserDefaults.standard.set(colour, forKey: key)
+        for i in chats.indices { chats[i].familyColour = chats[i].family.flatMap { colour[$0] } }
     }
 
     static func run(_ script: String, _ args: [String]) -> Result<[Chat], Error> {
@@ -233,7 +260,12 @@ struct PanelView: View {
     }
 
     // What Return opens: the first match in section order.
-    var firstMatch: Chat? { sections.flatMap { s in filtered.filter { $0.section == s.key } }.first }
+    var firstMatch: Chat? { sections.flatMap { s in arranged(filtered.filter { $0.section == s.key }) }.first?.chat }
+
+    // A section's rows in display order: as listed, or as a tree in the Indent layout.
+    func arranged(_ items: [Chat]) -> [(chat: Chat, spot: TreeSpot?)] {
+        prefs.linkStyle == .indent ? treeOrder(items).map { ($0.chat, $0.spot) } : items.map { ($0, nil) }
+    }
 
     // Short folder names, worked out across every chat so they don't change while searching.
     var folderNames: [String: String] { shortFolders(store.chats.map(\.folder)) }
@@ -336,9 +368,10 @@ struct PanelView: View {
         .accessibilityAddTraits(.isHeader)
         if open_ {
             VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { i, c in
+                ForEach(Array(arranged(items).enumerated()), id: \.element.chat.id) { i, row in
+                    let c = row.chat
                     ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
-                            density: prefs.density, divider: i > 0, folderName: names[c.folder])
+                            density: prefs.density, divider: i > 0, folderName: names[c.folder], spot: row.spot)
                         .opacity(sectionOpacity(sec.key))
                         .contentShape(Rectangle())
                         .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
@@ -395,7 +428,17 @@ struct ChatRow: View {
     let density: Density
     let divider: Bool
     var folderName: String? = nil  // shortFolders' name for chat.folder; nil shows the last folder
+    var spot: TreeSpot? = nil      // set in the Indent layout of linked chats
     @ObservedObject var prefs = Prefs.shared
+
+    var iconSize: CGFloat { m.icon }
+    var indentStep: CGFloat { iconSize / 2 + 12 }
+    var ring: Bool { prefs.linkStyle == .ring }
+    // Indent layout, top level, but started from another chat: say which one.
+    var fromTitle: String? {
+        guard let s = spot, s.depth == 0, chat.parent != nil else { return nil }
+        return chat.parent_title
+    }
 
     var folder: String? { prefs.hidesLabel(chat.folder) ? nil : chat.folder }
 
@@ -403,15 +446,71 @@ struct ChatRow: View {
         let st = statusStyle[chat.status] ?? statusStyle["unsure"]!
         return StateIcon(symbol: topicSymbol(chat.icon, status: chat.status, allow: iconAllowlist),
                          color: st.color, size: m.icon, solidColor: statusSolid[chat.status])
+            .overlay { if ring, let c = familyColor { Circle().strokeBorder(c, lineWidth: 2.5) } }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+            .accessibilityLabel((statusName[chat.status] ?? "Unsure") + linkLabel)
             .help("\(statusName[chat.status] ?? "Unsure"): \(statusMeaning[chat.status] ?? "")")
+    }
+
+    var linkLabel: String {
+        if ring { return chat.family == nil ? "" : ", linked chat" }
+        if let s = spot, s.depth > 0 { return ", started from the chat above" }
+        if let t = fromTitle { return ", started from \(t)" }
+        return ""
+    }
+
+    // "↳ from <parent>", one line, under the title.
+    func fromLine(_ t: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.turn.down.right").font(.system(size: 9.5, weight: .semibold)).accessibilityHidden(true)
+            Text("from \(t)").lineLimit(1).truncationMode(.tail)
+        }
+        .font(.system(size: m.meta - 0.5)).foregroundStyle(Theme.panelSecondary)
+        .help("Started from \(t)")
+    }
+
+    // The lines joining a child to its parent: an elbow from the parent's icon, plus
+    // straight lines for any ancestor whose later children are still to come.
+    func treeLines(_ s: TreeSpot, _ size: CGSize) -> Path {
+        let mid = size.height / 2
+        func x(_ level: Int) -> CGFloat { 12 + CGFloat(level) * indentStep + iconSize / 2 }
+        var p = Path()
+        for (k, on) in s.guides.enumerated() where on {
+            p.move(to: CGPoint(x: x(k), y: 0)); p.addLine(to: CGPoint(x: x(k), y: size.height))
+        }
+        if s.depth > 0 {
+            let px = x(s.depth - 1), r: CGFloat = 6
+            p.move(to: CGPoint(x: px, y: 0))
+            if !s.last { p.addLine(to: CGPoint(x: px, y: size.height)); p.move(to: CGPoint(x: px, y: 0)) }
+            p.addLine(to: CGPoint(x: px, y: mid - r))
+            p.addQuadCurve(to: CGPoint(x: px + r, y: mid), control: CGPoint(x: px, y: mid))
+            p.addLine(to: CGPoint(x: x(s.depth) - iconSize / 2 - 4, y: mid))
+        }
+        if s.hasKids {  // a stub from under this row's icon down to its first child
+            p.move(to: CGPoint(x: x(s.depth), y: mid + iconSize / 2 + 3)); p.addLine(to: CGPoint(x: x(s.depth), y: size.height))
+        }
+        return p
     }
 
     var m: RowMetrics { RowMetrics.of(density, scale: prefs.textScale) }
 
     var summary: some View {
         Text(chat.why).font(.system(size: m.summary)).foregroundStyle(Theme.panelSecondary).lineLimit(prefs.summaryLines(density))
+    }
+
+    // Linked chats (a chat and the side sessions started from it) share a border
+    // ring round the state icon. Store.assignFamilyColours picks which one. Ordered so
+    // neighbours contrast, and kept away from the status colours (blue, amber, red, green, purple).
+    static let familyPalette: [NSColor] = [
+        0xEE1D52,  // raspberry
+        0x0FA37F,  // jade (greener than sky, so the two don't blur)
+        0xF9DC1C,  // lemon (clear of the amber "waiting" colour)
+        0x2E3F9E,  // navy
+        0x8CC63F,  // lime
+        0x5CC8F5,  // sky
+    ].map { NSColor(srgbRed: CGFloat($0 >> 16 & 0xFF) / 255, green: CGFloat($0 >> 8 & 0xFF) / 255, blue: CGFloat($0 & 0xFF) / 255, alpha: 1) }
+    var familyColor: Color? {
+        chat.familyColour.map { Color(nsColor: ChatRow.familyPalette[$0 % ChatRow.familyPalette.count]) }
     }
 
     var body: some View {
@@ -421,6 +520,7 @@ struct ChatRow: View {
                     icon
                     VStack(alignment: .leading, spacing: m.gap) {
                         Text(chat.title).font(.system(size: m.title, weight: .semibold)).lineLimit(1)
+                        if let t = fromTitle { fromLine(t) }
                         if !chat.why.isEmpty { summary }
                     }
                     Spacer(minLength: 8)
@@ -436,6 +536,7 @@ struct ChatRow: View {
                     icon
                     HStack(spacing: 8) {
                         Text(chat.title).font(.system(size: m.title, weight: .semibold)).lineLimit(1)
+                        if let t = fromTitle { fromLine(t).layoutPriority(-1) }  // gives way before title, folder and age
                         Spacer(minLength: 8)
                         Group {
                             if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
@@ -448,9 +549,22 @@ struct ChatRow: View {
             }
         }
         .padding(.horizontal, 12)
+        .padding(.leading, CGFloat(spot?.depth ?? 0) * indentStep)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(selected ? Theme.text.opacity(0.06) : .clear)
-        .overlay(alignment: .top) { if divider { Rectangle().fill(Theme.hairline).frame(height: 1) } }
+        .overlay {
+            if let s = spot, s.depth > 0 || s.hasKids {
+                GeometryReader { g in treeLines(s, g.size).stroke(Theme.panelSecondary.opacity(0.45), lineWidth: 1.5) }
+                    .accessibilityHidden(true)
+            }
+        }
+        // A child's divider starts at its own indent, so the branch reads as one block.
+        .overlay(alignment: .top) {
+            if divider {
+                Rectangle().fill(Theme.hairline).frame(height: 1)
+                    .padding(.leading, CGFloat(spot?.depth ?? 0) * indentStep)
+            }
+        }
     }
 }
 

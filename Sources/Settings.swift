@@ -36,6 +36,7 @@ final class Prefs: ObservableObject {
     @Published var edgeShadow: Bool {
         didSet { d.set(edgeShadow, forKey: "edgeShadow"); NotificationCenter.default.post(name: .edgeShadowChanged, object: nil) }
     }
+    @Published var linkStyle: LinkStyle { didSet { d.set(linkStyle.rawValue, forKey: "linkStyle") } }
     // Where topic icons come from: "subject" or "folder".
     @Published var iconSource: String { didSet { d.set(iconSource, forKey: "iconSource"); scriptChanged() } }
     // Folders whose label is hidden on cards. Replaces the old single "homeFolder".
@@ -68,7 +69,7 @@ final class Prefs: ObservableObject {
         d.register(defaults: [
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
-            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false, "edgeShadow": false,
+            "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false, "edgeShadow": false, "linkStyle": LinkStyle.indent.rawValue,
             "hideAllFolders": false, "minimiseOthers": false, "doneFade": 40.0, "fadeWhich": "both", "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
@@ -87,6 +88,7 @@ final class Prefs: ObservableObject {
         linesCozy = min(3, max(1, d.integer(forKey: "summaryLinesCozy")))
         solidIcons = d.bool(forKey: "solidIcons")
         edgeShadow = d.bool(forKey: "edgeShadow")
+        linkStyle = LinkStyle(rawValue: d.string(forKey: "linkStyle") ?? "") ?? .indent
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         // First launch after the update: carry the old single hidden folder into the list.
         if d.stringArray(forKey: "hiddenFolders") == nil {
@@ -604,7 +606,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Preview").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
-                ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false)
+                VStack(spacing: 0) {
+                    ChatRow(chat: sampleChat, selected: false, density: prefs.density, divider: false,
+                            spot: prefs.linkStyle == .indent ? TreeSpot(hasKids: true) : nil)
+                    ChatRow(chat: sampleChild, selected: false, density: prefs.density, divider: true,
+                            spot: prefs.linkStyle == .indent ? TreeSpot(depth: 1) : nil)
+                }
                     .background(GroupBackground(look: AppearanceValues(background: .solid, opacity: 100)))
                     .frame(maxWidth: 440)
                     .padding(12)
@@ -644,6 +651,14 @@ struct SettingsView: View {
                 .disabled(prefs.hideAllFolders)
                 .opacity(prefs.hideAllFolders ? 0.5 : 1)
                 Hairline()
+                Row(title: "Linked chats",
+                    helper: "Chats started from another chat. Indent puts them under it. Ring gives related chats the same coloured ring.") {
+                    Picker("Linked chats", selection: $prefs.linkStyle) {
+                        Text("Indent").tag(LinkStyle.indent); Text("Ring").tag(LinkStyle.ring)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Hairline()
                 Row(title: "Fade", helper: "Which finished chats show fainter, so open work stands out.") {
                     Picker("Fade", selection: $prefs.fadeWhich) {
                         Text("Both").tag("both"); Text("Done").tag("done"); Text("Ready to clear").tag("clear"); Text("Neither").tag("none")
@@ -668,8 +683,15 @@ struct SettingsView: View {
     var sampleChat: Chat {
         Chat(id: "preview", status: "waiting", why: "Want me to send the draft to the team now?",
              title: "Write the launch post", folder: "clients/acme",
-             age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
-             icon: "pencil", own_icon: nil)
+             age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: "preview", cwd: nil,
+             icon: "pencil", own_icon: nil, family: "preview", familyColour: 0)
+    }
+
+    var sampleChild: Chat {
+        Chat(id: "preview-child", status: "running", why: "Checking the links in the draft.",
+             title: "Check the links", folder: "clients/acme",
+             age: 120, engaged: 120, section: "today", app: "desktop", desktop_id: "preview-child", cwd: nil,
+             icon: "link", own_icon: nil, parent: "preview", family: "preview", familyColour: 0)
     }
 
     // Settings › Guide "Good to know": a short bold title per topic, with bullets under it.

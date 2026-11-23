@@ -23,6 +23,13 @@ The icon's colour tells you what the chat needs:
 
 The symbol inside is the chat's topic icon (an SF Symbol, such as a banknote or a hammer) if it has one. Otherwise it's the state's own symbol: dots, question mark, cross, tick, box, exclamation mark or dotted circle.
 
+A chat started from another one (a side session) shows its link in one of two ways. Pick which in Settings › Cards › Linked chats:
+
+- **Indent** (default): the side session sits under the chat that started it, joined by a line. If the two are in different sections, or the parent isn't listed, the row says "from <parent>" instead.
+- **Ring**: every chat in the family gets the same coloured ring round its icon. Each family gets its own colour.
+
+A chat you detached (moved to top level) shows as a plain chat in both.
+
 ## Install
 
 You need a Mac with Apple's command line tools. If `swiftc --version` fails, run `xcode-select --install` first.
@@ -49,7 +56,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 
 - **General**: launch at login, and a button to show the welcome screen again.
 - **Appearance**: theme (auto, light or dark); background (Solid, Frosted, or Glass on macOS 26 and later); how see-through the panel is; and density (Cozy shows each chat's summary, Compact fits more chats on one line each). Reduce transparency or Increase contrast in macOS forces Solid.
-- **Cards**: whether topic icons come from the chat's subject or its folder, which folders' labels to hide (most people keep most chats in one or two folders) or a switch to hide them all, and how faint Done chats are.
+- **Cards**: whether topic icons come from the chat's subject or its folder, which folders' labels to hide (most people keep most chats in one or two folders) or a switch to hide them all, how linked chats show (Indent or Ring), and which finished chats fade and by how much.
 - **Windows**: minimise other Claude windows when you open a chat. Hold Command or Option while you click a chat to flip this setting for that one click.
 - **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick a topic icon for each chat, and the Ready to clear section. A Re-pick button asks again for every chat's topic icon.
 

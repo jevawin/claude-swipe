@@ -5,7 +5,7 @@ blocked / done / finished, each with a topic icon (an SF Symbol name).
 Sources (both undocumented, read-only):
 - ~/.claude/projects/<dashed-cwd>/<cli-session-id>.jsonl   transcripts
 - ~/Library/Application Support/Claude/claude-code-sessions/<account>/<org>/local_*.json
-  desktop app metadata: title, cwd, isArchived, cliSessionId
+  desktop app metadata: title, cwd, isArchived, cliSessionId, spawnedFrom
 
 Rules decide most chats. With --sort, ones the rules can't call go to the
 model in one batch via `claude -p --model <model> --no-session-persistence`.
@@ -58,6 +58,35 @@ def desktop_meta():
             continue
         if d.get("cliSessionId"):
             out[d["cliSessionId"]] = d
+    return out
+
+
+def parent_of(d):
+    """The desktop sessionId this chat was started from, or None.
+
+    A chat started from another one records it in spawnedFrom.sessionId.
+    Detaching ("elevating") a chat sets lineageDetached and leaves spawnedFrom
+    in place, so a detached chat counts as its own chat. Measured 23 Nov 2026
+    on 429 chats: spawnedFrom.sessionId matched the app's own startedBy on 415,
+    and the other 14 were exactly the ones with lineageDetached true."""
+    if d.get("lineageDetached"):
+        return None
+    return (d.get("spawnedFrom") or {}).get("sessionId")
+
+
+def families(meta):
+    """desktop sessionId -> the sessionId at the top of its chain of side sessions.
+
+    spawnSeed and lastSpawnRootDetected don't hold the link (measured 2026-11-10
+    and 23 Nov 2026). Chats with no parent are their own root."""
+    parent = {d.get("sessionId"): parent_of(d) for d in meta.values() if d.get("sessionId")}
+    out = {}
+    for sid in parent:
+        root, seen = sid, {sid}
+        while parent.get(root) and parent[root] not in seen:
+            root = parent[root]
+            seen.add(root)
+        out[sid] = root
     return out
 
 
@@ -440,6 +469,7 @@ def main():
                "folder": folder_label(dm.get("cwd") or m["cwd"], m["branch"]),
                "age": age, "engaged": now - touched, "app": "desktop",
                "desktop_id": dm.get("sessionId"),
+               "parent": parent_of(dm),
                "cwd": dm.get("cwd") or m["cwd"], "pinned": sid in pins}
         key = f"{sid}:{mtime}"
         info[sid] = {"key": key, "opening": first_prompt(recs), "reply": last_reply(recs)}
@@ -476,7 +506,19 @@ def main():
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_text(json.dumps(cache))
 
+    # Linked chats share a family: the root of their side-session chain. Only
+    # set when two or more listed chats share it, so lone chats look as before.
+    fam = families(meta)
+    counts = {}
     for r in rows:
+        r["family"] = fam.get(r["desktop_id"])
+        counts[r["family"]] = counts.get(r["family"], 0) + 1
+    # The parent's title, for "from <parent>" when the parent isn't listed next to it.
+    titles = {d.get("sessionId"): d.get("title") for d in meta.values()}
+    for r in rows:
+        r["parent_title"] = titles.get(r["parent"]) if r["parent"] else None
+        if counts.get(r["family"], 0) < 2:
+            r["family"] = None
         r["section"] = section(r["status"], r["engaged"], r["pinned"])
     order = {"pinned": -1, "active": 0, "today": 1, "older": 2, "done": 3, "clear": 4}
     rows.sort(key=lambda r: (order[r["section"]], r["engaged"]))
@@ -487,7 +529,8 @@ def main():
     for r in rows:
         a = max(0, r["engaged"])
         age = f"{int(a // 60)}m" if a < 3600 else f"{int(a // 3600)}h" if a < 86400 else f"{int(a // 86400)}d"
-        print(f"{r['section']:<6} {r['status']:<8} {age:>4}  {r['folder'][:30]:<30}  {r['title'][:38]:<38}  {r['why'][:60]}")
+        link = f"  [linked {r['family'][6:14]}]" if r["family"] else ""
+        print(f"{r['section']:<6} {r['status']:<8} {age:>4}  {r['folder'][:30]:<30}  {r['title'][:38]:<38}  {r['why'][:60]}{link}")
 
 
 if __name__ == "__main__":
