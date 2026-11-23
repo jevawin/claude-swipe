@@ -406,7 +406,7 @@ struct SettingsView: View {
     }
 
     let panes: [(name: String, icon: String)] = [
-        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"),
+        ("General", ""), ("Appearance", "circle.lefthalf.filled"), ("Cards", "rectangle.stack"), ("Windows", "macwindow.on.rectangle"), ("AI", "sparkles"), ("Guide", "questionmark.circle"),
     ]
 
     var body: some View {
@@ -444,6 +444,7 @@ struct SettingsView: View {
                     case "Cards": cards
                     case "Windows": windows
                     case "AI": ai
+                    case "Guide": guide
                     default: general
                     }
                 }
@@ -629,6 +630,58 @@ struct SettingsView: View {
              title: "Write the launch post", folder: "clients/acme",
              age: 600, engaged: 600, section: "today", app: "desktop", desktop_id: nil, cwd: nil,
              icon: "pencil", own_icon: nil)
+    }
+
+    // Settings › Guide "Good to know": a short bold title per topic, with bullets under it.
+    var guideTips: [(title: String, points: [String])] {[
+        ("Topic icons", ["Right-click a chat and pick 'Change topic icon…' to choose your own.",
+                         "Icons you choose stay put. Claude never replaces them."]),
+        ("Sections", ["'Active': chats you've worked in during the last hour.",
+                      "'Waiting': chats that need you, split into today and older.",
+                      "'Ready to clear' only appears if you turn it on in Settings › AI."]),
+    ]}
+
+    // A short explainer: what the icon colours mean and a few things people miss.
+    var guide: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Group_ {
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("What the icon colours mean").font(.system(size: 15, weight: .semibold))
+                        Text("The colour of each chat's icon shows its state. Hover over an icon to see it.")
+                            .font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                    }
+                    ForEach(statusOrder, id: \.self) { s in
+                        let st = statusStyle[s]!
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Circle().fill(st.color).frame(width: 12, height: 12).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                            Text(statusName[s] ?? s).font(.system(size: 13, weight: .medium)).frame(width: 110, alignment: .leading)
+                            Text(statusMeaning[s] ?? "").font(.system(size: 13)).foregroundStyle(Theme.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+            Group_ {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Good to know").font(.system(size: 15, weight: .semibold))
+                    ForEach(guideTips, id: \.title) { tip in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(tip.title).font(.system(size: 13, weight: .semibold))
+                            ForEach(tip.points, id: \.self) { point in
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text("•").foregroundStyle(Theme.secondary)
+                                    Text(point).fixedSize(horizontal: false, vertical: true)
+                                }
+                                .font(.system(size: 13))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+        }
     }
 
     var windows: some View {

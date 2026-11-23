@@ -162,6 +162,18 @@ let sections: [(key: String, label: String)] = [
     ("done", "Done"),
 ]
 
+// One line on each state, for the icon tooltip and Settings › Guide.
+let statusMeaning: [String: String] = [
+    "running": "Claude is working on it.",
+    "waiting": "Claude asked you something or wants a reply.",
+    "blocked": "Needs a click from you to carry on, often a permission prompt.",
+    "done": "Claude finished its turn. There may still be more to do.",
+    "finished": "The AI thinks the whole job is finished, so you can archive it. A guess, so check first.",
+    "stuck": "A prompt went in, but no reply has come back for a while.",
+    "unsure": "ClaudeSwipe couldn't tell what state this chat is in.",
+]
+let statusOrder = ["running", "waiting", "blocked", "done", "finished", "stuck", "unsure"]
+
 let statusName: [String: String] = [
     "running": "Running", "waiting": "Waiting for you", "blocked": "Blocked", "done": "Done",
     "finished": "Ready to clear", "stuck": "Stuck", "unsure": "Unsure",
@@ -349,6 +361,7 @@ struct ChatRow: View {
                          color: st.color, size: m.icon)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(statusName[chat.status] ?? "Unsure")
+            .help("\(statusName[chat.status] ?? "Unsure"): \(statusMeaning[chat.status] ?? "")")
     }
 
     var m: RowMetrics { RowMetrics.of(density, scale: prefs.textScale) }
