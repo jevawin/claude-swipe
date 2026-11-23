@@ -462,7 +462,7 @@ def main():
 
     for r in rows:
         r["section"] = section(r["status"], r["engaged"])
-    order = {"active": 0, "today": 1, "older": 2, "clear": 3, "done": 4}
+    order = {"active": 0, "today": 1, "older": 2, "done": 3, "clear": 4}
     rows.sort(key=lambda r: (order[r["section"]], r["engaged"]))
 
     if args.json:

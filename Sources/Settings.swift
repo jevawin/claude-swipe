@@ -42,6 +42,8 @@ final class Prefs: ObservableObject {
     @Published var minimiseOthers: Bool { didSet { d.set(minimiseOthers, forKey: "minimiseOthers") } }
     // Percent to fade Done cards by. Capped at 80 so they stay readable.
     @Published var doneFade: Double { didSet { d.set(doneFade, forKey: "doneFade") } }
+    // Which sections fade: "both", "done", "clear" (Ready to clear) or "none".
+    @Published var fadeWhich: String { didSet { d.set(fadeWhich, forKey: "fadeWhich") } }
     // Whether the Done section is open; remembers the last click.
     @Published var showDone: Bool { didSet { d.set(showDone, forKey: "showDone") } }
     // Model changes only affect new picks, so no refresh.
@@ -65,7 +67,7 @@ final class Prefs: ObservableObject {
             "theme": "auto", "iconSource": "subject",
             "panelOpacity": defaultAppearance.opacity, "panelBackground": defaultAppearance.background.rawValue,
             "density": Density.standard.rawValue, "textScale": 1.0, "summaryLinesDefault": 2, "summaryLinesCozy": 1, "solidIcons": false, "edgeShadow": false,
-            "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "showDone": true, "aiModel": "haiku",
+            "homeFolder": "", "minimiseOthers": false, "doneFade": 40.0, "fadeWhich": "both", "showDone": true, "aiModel": "haiku",
             "aiSort": false, "aiIcon": false, "aiClear": false,
         ])
         theme = d.string(forKey: "theme") ?? "auto"
@@ -87,6 +89,7 @@ final class Prefs: ObservableObject {
         homeFolder = d.string(forKey: "homeFolder") ?? ""
         minimiseOthers = d.bool(forKey: "minimiseOthers")
         doneFade = min(80, max(0, d.double(forKey: "doneFade")))
+        fadeWhich = d.string(forKey: "fadeWhich") ?? "both"
         showDone = d.bool(forKey: "showDone")
         aiModel = d.string(forKey: "aiModel") ?? "haiku"
         aiSort = d.bool(forKey: "aiSort")
@@ -612,15 +615,23 @@ struct SettingsView: View {
                     .labelsHidden().frame(maxWidth: 220)
                 }
                 Hairline()
-                Row(title: "Fade done chats",
-                    helper: "Done chats show fainter so open work stands out. 80% at most, so they stay readable.") {
+                Row(title: "Fade", helper: "Which finished chats show fainter, so open work stands out.") {
+                    Picker("Fade", selection: $prefs.fadeWhich) {
+                        Text("Both").tag("both"); Text("Done").tag("done"); Text("Ready to clear").tag("clear"); Text("Neither").tag("none")
+                    }
+                    // A menu, not segments: four segments squeezed the title and helper into a sliver.
+                    .pickerStyle(.menu).labelsHidden().fixedSize()
+                }
+                Hairline()
+                Row(title: "Fade amount",
+                    helper: "80% at most, so they stay readable. With Both, Ready to clear fades a step further.") {
                     HStack(spacing: 8) {
                         Slider(value: $prefs.doneFade, in: 0...80, step: 5).frame(width: 130)
                         Text("\(Int(prefs.doneFade))%").monospacedDigit()
                             .foregroundStyle(Theme.secondary).frame(width: 34, alignment: .trailing)
-                        Button("No fade") { prefs.doneFade = 0 }.disabled(prefs.doneFade == 0)
                     }
                 }
+                .disabled(prefs.fadeWhich == "none").opacity(prefs.fadeWhich == "none" ? 0.5 : 1)
             }
         }
     }

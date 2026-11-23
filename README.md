@@ -6,8 +6,8 @@ Chats are grouped as:
 
 - **Active**: anything you've touched in the last hour.
 - **Waiting · today** and **Waiting · older**: chats that need you, split by when you last touched them.
-- **Ready to clear**: done chats where the whole job is finished, so you can archive them. Only shown if you turn it on in Settings › AI.
 - **Done**: finished chats, shown faded. Click the header to collapse it.
+- **Ready to clear**: done chats where the whole job is finished, so you can archive them. They sit under Done, faded a step further. Only shown if you turn it on in Settings › AI.
 
 Each row shows a round icon, the chat's title, a one-line summary, how long ago you touched it, and its folder. The folder is the shortest name no other chat shares: `bookmygarage`, but `clients/acme` and `personal/acme` when both are there. Hover over it for the full path.
 
@@ -17,7 +17,7 @@ The icon's colour tells you what the chat needs:
 - Amber: waiting for your answer.
 - Red: blocked, for example on a permission prompt. It needs a click to carry on.
 - Green: done.
-- Violet: ready to clear.
+- Faded green: ready to clear. A done chat the AI thinks is finished with.
 - Grey: stuck or unsure.
 
 The symbol inside is the chat's topic icon (an SF Symbol, such as a banknote or a hammer) if it has one. Otherwise it's the state's own symbol: dots, question mark, cross, tick, box, exclamation mark or dotted circle.
