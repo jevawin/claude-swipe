@@ -124,6 +124,9 @@ func themed(_ light: NSColor, _ dark: NSColor) -> Color {
 
 enum Theme {
     static let bg = themed(hsl(48, 33.3, 97.1), hsl(60, 2.7, 14.5))         // --bg-100
+    // The panel behind the groups: a few steps darker than bg in light mode, so white
+    // groups stand out. Dark mode unchanged.
+    static let panelBg = themed(hsl(45, 22, 92.5), hsl(60, 2.7, 14.5))
     static let text = themed(hsl(60, 2.6, 7.6), hsl(48, 33.3, 97.1))        // --text-100
     static let secondary = themed(hsl(51, 3.1, 43.7), hsl(48, 4.8, 59.2))   // --text-400
     static let border = themed(hsl(51, 16.5, 84.5), hsl(50, 9, 73.7).withAlphaComponent(0.15))
