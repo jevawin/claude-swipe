@@ -10,7 +10,7 @@ Chats are grouped as:
 - **Done**: finished chats, shown faded. Click the header to collapse it.
 - **Ready to clear**: done chats where the whole job is finished, so you can archive them. They sit under Done, faded a step further. Only shown if you turn it on in Settings › AI.
 
-That's Settings › Cards › Group by › Status, the default. Pick **Day** to list chats by the day of their last message instead: Pinned, Today, Yesterday, weekday names back to 6 days ago, then Older. Newest first in each day. There are no Done or Ready to clear sections in Day; finished chats fade in place. Opening a chat doesn't move it, since only a new message does.
+That's Settings › Cards › Group by › Status, the default. Pick **Day** to list chats by the day of their last message instead: Pinned, Today, Yesterday, weekday names back to 6 days ago, then Older. Newest first in each day. There are no Done or Ready to clear sections in Day; finished chats fade in place. A chat moves on a new message, not when you look at it. The time on each row then counts from that last message.
 
 Each row shows a round icon, the chat's title, a one-line summary, how long ago you touched it, and its folder. The folder is the shortest name no other chat shares: `bookmygarage`, but `clients/acme` and `personal/acme` when both are there. Hover over it for the full path.
 

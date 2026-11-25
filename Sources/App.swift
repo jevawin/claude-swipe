@@ -350,6 +350,7 @@ struct PanelView: View {
     // Grouped by Day there are no such sections, so each row fades by its own state.
     func rowOpacity(_ c: Chat, section key: String) -> Double {
         if prefs.groupBy == .day {
+            if c.pinned == true { return 1 }  // as in Status, where Pinned never fades
             return sectionOpacity(c.status == "done" ? "done" : c.status == "finished" ? "clear" : "")
         }
         return sectionOpacity(key)
@@ -456,6 +457,11 @@ struct ChatRow: View {
     var iconSize: CGFloat { m.icon }
     var indentStep: CGFloat { iconSize / 2 + 12 }
     var ring: Bool { prefs.linkStyle == .ring }
+    // Grouped by Day, the time matches the day header: since the last message, not last touched.
+    var shownAge: Double {
+        guard prefs.groupBy == .day, let t = chat.active_at else { return chat.engaged }
+        return max(0, Date().timeIntervalSince1970 - t)
+    }
     // Indent layout, top level, but started from another chat: say which one.
     var fromTitle: String? {
         guard let s = spot, s.depth == 0, chat.parent != nil else { return nil }
@@ -547,7 +553,7 @@ struct ChatRow: View {
                     }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: m.gap) {
-                        Text(ageText(chat.engaged))
+                        Text(ageText(shownAge))
                         if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
                     }
                     .font(.system(size: m.meta)).foregroundStyle(Theme.panelSecondary)
@@ -562,7 +568,7 @@ struct ChatRow: View {
                         Spacer(minLength: 8)
                         Group {
                             if let f = folder { Text(folderName ?? shortFolders([f])[f] ?? f).lineLimit(1).truncationMode(.middle).frame(maxWidth: 120, alignment: .trailing).help(f) }
-                            Text(ageText(chat.engaged))
+                            Text(ageText(shownAge))
                         }
                         .font(.system(size: m.meta)).foregroundStyle(Theme.panelSecondary)
                     }
