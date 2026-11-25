@@ -72,5 +72,25 @@ check("treeGrandchild", t2.map(\.0) == ["a", "b", "b1", "c"] && t2.map { $0.1.de
 check("treeGuideRunsPastGrandchild", t2[2].1.guides == [true] && !t2[1].1.last && t2[3].1.last)
 check("treeLoopShowsEachOnce", Set(tree([("p", "q"), ("q", "p")]).map(\.0)) == ["p", "q"])
 check("treeSelfParent", tree([("s", "s")]).map { $0.1.depth } == [0])
+
+// Group by Day. Fixed calendar so the checks don't depend on this Mac's settings.
+var cal = Calendar(identifier: .gregorian)
+cal.timeZone = TimeZone(identifier: "Europe/London")!
+cal.locale = Locale(identifier: "en_GB")
+func at(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ mi: Int = 0) -> Date {
+    cal.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: mi))!
+}
+let wedEarly = at(2026, 11, 25, 0, 30)  // Wednesday, just past midnight
+check("dayToday", dayKey(activeAt: at(2026, 11, 25, 0, 5), pinned: false, now: wedEarly, calendar: cal) == "d0")
+check("dayMidnightSplits", dayKey(activeAt: at(2026, 11, 24, 23, 55), pinned: false, now: wedEarly, calendar: cal) == "d1")
+check("daySixBack", dayKey(activeAt: at(2026, 11, 19, 0, 1), pinned: false, now: wedEarly, calendar: cal) == "d6")
+check("daySevenIsOlder", dayKey(activeAt: at(2026, 11, 18, 23, 59), pinned: false, now: wedEarly, calendar: cal) == "older")
+check("dayFutureIsToday", dayKey(activeAt: at(2026, 11, 26, 9), pinned: false, now: wedEarly, calendar: cal) == "d0")
+check("dayPinnedWins", dayKey(activeAt: at(2026, 1, 1, 9), pinned: true, now: wedEarly, calendar: cal) == "pinned")
+// Clocks went back on 25 Oct 2026: still whole days, not 24-hour blocks.
+check("dayAcrossClockChange", dayKey(activeAt: at(2026, 10, 24, 23, 59), pinned: false, now: at(2026, 10, 28, 0, 1), calendar: cal) == "d4")
+let labels = dayGroups(now: wedEarly, calendar: cal).map(\.label)
+check("dayLabels", labels == ["Pinned", "Today", "Yesterday", "Monday", "Sunday", "Saturday", "Friday", "Thursday", "Older"])
+
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

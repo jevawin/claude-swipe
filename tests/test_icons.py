@@ -85,3 +85,16 @@ class RepickTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LastMessageTests(unittest.TestCase):
+    """Group by Day uses the newest message's time, not the file's."""
+
+    def test_newest_timestamp_wins(self):
+        from recent_chats import last_message_at
+        recs = [{"timestamp": "2026-11-20T10:00:00Z"}, {"timestamp": "2026-11-21T09:30:00.500Z"}, {}]
+        self.assertAlmostEqual(last_message_at(recs, 0), 1795253400.5)
+
+    def test_falls_back_without_timestamps(self):
+        from recent_chats import last_message_at
+        self.assertEqual(last_message_at([{}, {"timestamp": "bad"}], 42.0), 42.0)

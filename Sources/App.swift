@@ -15,6 +15,7 @@ struct Chat: Codable, Identifiable, Hashable {
     let folder: String
     let age: Double
     let engaged: Double
+    var active_at: Double?  // epoch time of the last message, for Group by Day
     var section: String
     let app: String
     let desktop_id: String?
@@ -256,7 +257,26 @@ struct PanelView: View {
     }
 
     // What Return opens: the first match in section order.
-    var firstMatch: Chat? { sections.flatMap { s in arranged(filtered.filter { $0.section == s.key }) }.first?.chat }
+    var firstMatch: Chat? { grouped().flatMap { arranged($0.items) }.first?.chat }
+
+    // The groups the panel shows, each with its chats in order. Status uses the sections
+    // from recent_chats.py as sorted there. Day puts each chat under the day of its last
+    // message (DayGroups.swift), newest first; labels follow the clock at draw time.
+    func grouped() -> [(sec: (key: String, label: String), items: [Chat])] {
+        let chats = filtered
+        guard prefs.groupBy == .day else {
+            return sections.map { s in (s, chats.filter { $0.section == s.key }) }.filter { !$0.items.isEmpty }
+        }
+        let now = Date()
+        func when(_ c: Chat) -> Double { c.active_at ?? now.timeIntervalSince1970 - c.age }
+        let byKey = Dictionary(grouping: chats) {
+            dayKey(activeAt: Date(timeIntervalSince1970: when($0)), pinned: $0.pinned == true, now: now)
+        }
+        return dayGroups(now: now).compactMap { s in
+            guard let items = byKey[s.key] else { return nil }
+            return (s, items.sorted { when($0) > when($1) })
+        }
+    }
 
     // A section's rows in display order: as listed, or as a tree in the Indent layout.
     func arranged(_ items: [Chat]) -> [(chat: Chat, spot: TreeSpot?)] {
@@ -313,10 +333,7 @@ struct PanelView: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(sections, id: \.key) { sec in
-                        let items = filtered.filter { $0.section == sec.key }
-                        if !items.isEmpty { section(sec, items) }
-                    }
+                    ForEach(grouped(), id: \.sec.key) { g in section(g.sec, g.items) }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 12)
             }
@@ -330,6 +347,14 @@ struct PanelView: View {
 
     // Settings › Cards › Fade: which of Done and Ready to clear fade, by the fade amount.
     // With both, Ready to clear fades a step further, so the most settled chats look quietest.
+    // Grouped by Day there are no such sections, so each row fades by its own state.
+    func rowOpacity(_ c: Chat, section key: String) -> Double {
+        if prefs.groupBy == .day {
+            return sectionOpacity(c.status == "done" ? "done" : c.status == "finished" ? "clear" : "")
+        }
+        return sectionOpacity(key)
+    }
+
     func sectionOpacity(_ key: String) -> Double {
         let w = prefs.fadeWhich
         switch key {
@@ -368,7 +393,7 @@ struct PanelView: View {
                     let c = row.chat
                     ChatRow(chat: c, selected: hovered == c.id || (hovered == nil && !store.query.isEmpty && c.id == firstMatch?.id),
                             density: prefs.density, divider: i > 0, folderName: names[c.folder], spot: row.spot)
-                        .opacity(sectionOpacity(sec.key))
+                        .opacity(rowOpacity(c, section: sec.key))
                         .contentShape(Rectangle())
                         .onHover { if $0 { hovered = c.id } else if hovered == c.id { hovered = nil } }
                         .onTapGesture { open(c) }
