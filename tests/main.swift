@@ -92,5 +92,12 @@ check("dayAcrossClockChange", dayKey(activeAt: at(2026, 10, 24, 23, 59), pinned:
 let labels = dayGroups(now: wedEarly, calendar: cal).map(\.label)
 check("dayLabels", labels == ["Pinned", "Today", "Yesterday", "Monday", "Sunday", "Saturday", "Friday", "Thursday", "Older"])
 
+// Indent keeps families together: each member takes the family's newest time.
+let fam: [(t: Double, f: String?, pin: Bool)] = [(10, "a", false), (50, "a", false), (30, nil, false), (90, "a", true)]
+let ft = familyTimes(fam, time: \.t, family: \.f, pinned: \.pin)
+check("familyNewestWins", ft[0] == 50 && ft[1] == 50)
+check("familyLoneKeepsOwn", ft[2] == 30)
+check("familyPinnedDoesntPull", ft[3] == 90)
+
 if failures > 0 { print("\(failures) failed"); exit(1) }
 print("all passed")

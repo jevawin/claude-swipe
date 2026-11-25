@@ -269,8 +269,13 @@ struct PanelView: View {
         }
         let now = Date()
         func when(_ c: Chat) -> Double { c.active_at ?? now.timeIntervalSince1970 - c.age }
-        let byKey = Dictionary(grouping: chats) {
-            dayKey(activeAt: Date(timeIntervalSince1970: when($0)), pinned: $0.pinned == true, now: now)
+        // Indent keeps a family together, placed by its newest member; Ring has no nesting to keep.
+        let placed = prefs.linkStyle == .indent
+            ? familyTimes(chats, time: when, family: \.family, pinned: { $0.pinned == true })
+            : chats.map(when)
+        var byKey: [String: [Chat]] = [:]
+        for (c, t) in zip(chats, placed) {
+            byKey[dayKey(activeAt: Date(timeIntervalSince1970: t), pinned: c.pinned == true, now: now), default: []].append(c)
         }
         return dayGroups(now: now).compactMap { s in
             guard let items = byKey[s.key] else { return nil }

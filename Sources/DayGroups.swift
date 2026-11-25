@@ -35,3 +35,15 @@ func dayKey(activeAt: Date, pinned: Bool, now: Date, calendar: Calendar = .curre
     if days <= 0 { return "d0" }
     return days <= 6 ? "d\(days)" : "older"
 }
+
+// In the Indent layout a linked family stays together: every member is placed by the
+// newest message in its family, so a new side session pulls yesterday's parent into
+// Today. Pinned members sit in Pinned and don't pull the rest. Rows without a family
+// keep their own time.
+func familyTimes<T>(_ items: [T], time: (T) -> Double, family: (T) -> String?, pinned: (T) -> Bool) -> [Double] {
+    var newest: [String: Double] = [:]
+    for t in items where !pinned(t) {
+        if let f = family(t) { newest[f] = max(newest[f] ?? -.infinity, time(t)) }
+    }
+    return items.map { t in family(t).flatMap { newest[$0] }.map { max($0, time(t)) } ?? time(t) }
+}

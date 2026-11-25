@@ -10,7 +10,7 @@ Chats are grouped as:
 - **Done**: finished chats, shown faded. Click the header to collapse it.
 - **Ready to clear**: done chats where the whole job is finished, so you can archive them. They sit under Done, faded a step further. Only shown if you turn it on in Settings › AI.
 
-That's Settings › Cards › Group by › Status, the default. Pick **Day** to list chats by the day of their last message instead: Pinned, Today, Yesterday, weekday names back to 6 days ago, then Older. Newest first in each day. There are no Done or Ready to clear sections in Day; finished chats fade in place. A chat moves on a new message, not when you look at it. The time on each row then counts from that last message.
+That's Settings › Cards › Group by › Status, the default. Pick **Day** to list chats by the day of their last message instead: Pinned, Today, Yesterday, weekday names back to 6 days ago, then Older. Newest first in each day. There are no Done or Ready to clear sections in Day; finished chats fade in place. A chat moves on a new message, not when you look at it. The time on each row then counts from that last message. With Indent, linked chats stay together: the whole family sits under the day of its newest message, so a parent can show under Today with yesterday's time.
 
 Each row shows a round icon, the chat's title, a one-line summary, how long ago you touched it, and its folder. The folder is the shortest name no other chat shares: `bookmygarage`, but `clients/acme` and `personal/acme` when both are there. Hover over it for the full path.
 
@@ -27,7 +27,7 @@ The symbol inside is the chat's topic icon (an SF Symbol, such as a banknote or 
 
 A chat started from another one (a side session) shows its link in one of two ways. Pick which in Settings › Cards › Linked chats:
 
-- **Indent** (default): the side session sits under the chat that started it, joined by a line. If the two are in different sections (or days), or the parent isn't listed, the row says "from <parent>" instead.
+- **Indent** (default): the side session sits under the chat that started it, joined by a line. If the two are in different sections, or the parent isn't listed, the row says "from <parent>" instead.
 - **Ring**: every chat in the family gets the same coloured ring round its icon. Each family gets its own colour.
 
 A chat you detached (moved to top level) shows as a plain chat in both.
