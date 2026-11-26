@@ -47,6 +47,8 @@ final class Prefs: ObservableObject {
     @Published var doneFade: Double { didSet { d.set(doneFade, forKey: "doneFade") } }
     // Which sections fade: "both", "done", "clear" (Ready to clear) or "none".
     @Published var fadeWhich: String { didSet { d.set(fadeWhich, forKey: "fadeWhich") } }
+    // Settings › Cards › Group by: the smart sections (Status) or the day of the last message.
+    @Published var groupBy: GroupBy { didSet { d.set(groupBy.rawValue, forKey: "groupBy") } }
     // Whether the Done section is open; remembers the last click.
     @Published var showDone: Bool { didSet { d.set(showDone, forKey: "showDone") } }
     // Model changes only affect new picks, so no refresh.
@@ -89,6 +91,7 @@ final class Prefs: ObservableObject {
         solidIcons = d.bool(forKey: "solidIcons")
         edgeShadow = d.bool(forKey: "edgeShadow")
         linkStyle = LinkStyle(rawValue: d.string(forKey: "linkStyle") ?? "") ?? .indent
+        groupBy = GroupBy(rawValue: d.string(forKey: "groupBy") ?? "") ?? .status
         iconSource = d.string(forKey: "iconSource") ?? "subject"
         // First launch after the update: carry the old single hidden folder into the list.
         if d.stringArray(forKey: "hiddenFolders") == nil {
@@ -619,6 +622,14 @@ struct SettingsView: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border, lineWidth: 1))
             }
             Group_ {
+                Row(title: "Group by",
+                    helper: "Status puts chats that need you first. Day lists chats by the day of their last message, newest first.") {
+                    Picker("Group by", selection: $prefs.groupBy) {
+                        ForEach(GroupBy.allCases) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Hairline()
                 Row(title: "Topic icon from",
                     helper: "Claude picks these, so AI must be on. Right-click a chat to pick your own.") {
                     Picker("Topic icon from", selection: $prefs.iconSource) {
@@ -771,7 +782,7 @@ struct SettingsView: View {
                 }
                 Hairline()
                 Row(title: "Ready to clear section",
-                    helper: "Checks each done chat once more to see if the whole job is finished. Chats that pass get their own section.") {
+                    helper: "Checks each done chat once more to see if the whole job is finished. Chats that pass get their own section. Grouped by Day, they only show fainter.") {
                     Toggle("Ready to clear section", isOn: $prefs.aiClear).toggleStyle(.switch).labelsHidden()
                 }
             }

@@ -53,6 +53,8 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 
 ## Settings › Cards
 - Preview
+- Group by: Status / Day. Helper: Status puts chats that need you first. Day lists chats by the day of their last message, newest first.
+- In the panel, Day's group headers: Pinned, Today, Yesterday, then weekday names (Monday … ) back to 6 days ago, then Older.
 - Topic icon from: Chat subject / Folder. Helper: Claude picks these, so AI must be on. Right-click a chat to pick your own.
 - Hide all folder labels / Cards show no folder at all
 - Hide folder labels for: a checkbox per folder ("No folders yet" when there are none). Helper: Most chats sit in one or two folders. Hide those labels to keep cards tidy. Greyed out while Hide all folder labels is on.
@@ -68,7 +70,7 @@ Format: `Label / helper text`. Where a line has two parts, the first is the cont
 - Model: Haiku / Sonnet. Helper: Haiku is faster and uses less of your plan
 - Sort unclear chats / Off: those chats show as "unsure"
 - Pick a topic icon for each chat / Off: chats show their state icon, or your own pick
-- Ready to clear section / Checks each done chat once more to see if the whole job is finished. Chats that pass get their own section.
+- Ready to clear section / Checks each done chat once more to see if the whole job is finished. Chats that pass get their own section. Grouped by Day, they only show fainter.
 - Re-pick all topic icons / Changing the model or icon source only affects new chats. Re-pick asks Claude again for every chat from the last 7 days, using your plan. Your own picks stay. / Button: Re-pick…
 - Re-pick confirm dialog title: Re-pick all topic icons?
 - Re-pick confirm dialog body: ClaudeSwipe will ask {model} to pick a topic icon again for {count} chats from the last 7 days. This uses your Claude plan. Icons you picked yourself will not change.

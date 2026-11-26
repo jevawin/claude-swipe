@@ -10,6 +10,8 @@ Chats are grouped as:
 - **Done**: finished chats, shown faded. Click the header to collapse it.
 - **Ready to clear**: done chats where the whole job is finished, so you can archive them. They sit under Done, faded a step further. Only shown if you turn it on in Settings › AI.
 
+That's Settings › Cards › Group by › Status, the default. Pick **Day** to list chats by the day of their last message instead: Pinned, Today, Yesterday, weekday names back to 6 days ago, then Older. Newest first in each day. There are no Done or Ready to clear sections in Day; finished chats fade in place. A chat moves on a new message, not when you look at it. The time on each row then counts from that last message. With Indent, linked chats stay together: the whole family sits under the day of its newest message, so a parent can show under Today with yesterday's time.
+
 Each row shows a round icon, the chat's title, a one-line summary, how long ago you touched it, and its folder. The folder is the shortest name no other chat shares: `bookmygarage`, but `clients/acme` and `personal/acme` when both are there. Hover over it for the full path.
 
 The icon's colour tells you what the chat needs:
@@ -56,7 +58,7 @@ This builds the app, installs it to `~/Applications/ClaudeSwipe.app` and opens i
 
 - **General**: launch at login, and a button to show the welcome screen again.
 - **Appearance**: theme (auto, light or dark); background (Solid, Frosted, or Glass on macOS 26 and later); how see-through the panel is; and density (Cozy shows each chat's summary, Compact fits more chats on one line each). Reduce transparency or Increase contrast in macOS forces Solid.
-- **Cards**: whether topic icons come from the chat's subject or its folder, which folders' labels to hide (most people keep most chats in one or two folders) or a switch to hide them all, how linked chats show (Indent or Ring), and which finished chats fade and by how much.
+- **Cards**: group chats by Status or Day, whether topic icons come from the chat's subject or its folder, which folders' labels to hide (most people keep most chats in one or two folders) or a switch to hide them all, how linked chats show (Indent or Ring), and which finished chats fade and by how much.
 - **Windows**: minimise other Claude windows when you open a chat. Hold Command or Option while you click a chat to flip this setting for that one click.
 - **AI**: the model (Haiku or Sonnet), and three switches: sort unclear chats, let AI pick a topic icon for each chat, and the Ready to clear section. A Re-pick button asks again for every chat's topic icon.
 

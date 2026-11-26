@@ -18,6 +18,7 @@ Usage: recent_chats.py [--days N] [--json] [--model haiku|sonnet] [--sort]
 """
 import argparse, glob, json, os, subprocess, sys, time
 from pathlib import Path
+from datetime import datetime
 
 HOME = str(Path.home())
 PROJECTS = Path(HOME, ".claude/projects")
@@ -192,6 +193,20 @@ def app_summary(dm, recs):
     if cat == "completed":
         return "done", p.get("status_detail", "")
     return None
+
+
+def last_message_at(recs, fallback):
+    """Epoch time of the newest timestamped message, for Group by Day. File time
+    isn't enough: bookkeeping lines (cost-state, last-prompt) with no timestamp can
+    land days after the last message (measured 24 Nov 2026 on 2 of 15 transcripts)."""
+    for r in reversed(recs):
+        t = r.get("timestamp")
+        if t:
+            try:
+                return datetime.fromisoformat(t.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                continue
+    return fallback
 
 
 def section(status, engaged, pinned=False):
@@ -468,6 +483,7 @@ def main():
         row = {"id": sid, "status": status, "why": why, "title": title,
                "folder": folder_label(dm.get("cwd") or m["cwd"], m["branch"]),
                "age": age, "engaged": now - touched, "app": "desktop",
+               "active_at": last_message_at(recs, mtime),
                "desktop_id": dm.get("sessionId"),
                "parent": parent_of(dm),
                "cwd": dm.get("cwd") or m["cwd"], "pinned": sid in pins}
